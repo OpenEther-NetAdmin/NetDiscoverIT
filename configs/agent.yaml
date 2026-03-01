@@ -1,0 +1,63 @@
+# NetDiscoverIT Agent Configuration
+# Copy this to /app/config/agent.yaml when deploying
+
+VERSION: "0.1.0"
+
+# API Configuration
+API_KEY: "your-api-key-here"
+API_ENDPOINT: "http://api:8000"
+
+# Discovery Settings
+DISCOVERY_METHODS:
+  - ssh
+  - snmp
+
+SCAN_INTERVAL: "24h"
+
+# SSH Settings
+SSH_TIMEOUT: 30
+SSH_RETRY: 3
+
+# SNMP Settings
+SNMP_TIMEOUT: 5
+
+# Logging
+LOG_LEVEL: "info"
+
+# Target Devices
+# Configure the devices you want to discover here
+devices:
+  - hostname: "core-rtr-01"
+    ip: "10.0.0.1"
+    type: "router"
+    vendor: "cisco"
+    methods:
+      - ssh
+    credentials:
+      username: "admin"
+      password: "changeme"
+      enable_password: "changeme"
+  
+  - hostname: "core-sw-01"
+    ip: "10.0.0.2"
+    type: "switch"
+    vendor: "cisco"
+    methods:
+      - ssh
+    credentials:
+      username: "admin"
+      password: "changeme"
+  
+  # Example SNMP device
+  - hostname: "dist-sw-01"
+    ip: "10.0.0.3"
+    type: "switch"
+    vendor: "hp"
+    methods:
+      - snmp
+    credentials:
+      snmp_community: "public"
+
+# Ollama Configuration (for local LLM)
+OLLAMA_BASE_URL: "http://ollama:11434"
+OLLAMA_MODEL: "llama3.2:7b"

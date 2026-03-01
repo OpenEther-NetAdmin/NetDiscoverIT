@@ -1,0 +1,28 @@
+# NetDiscoverIT Agent Dependencies
+
+# Core
+python-dotenv==1.0.1
+pyyaml==6.0.2
+
+# Network
+netmiko==4.1.2
+napalm==4.4.0
+easysnmp==0.2.6
+
+# LLM / AI
+anthropic==0.38.0
+openai==1.52.0
+httpx==0.27.2
+
+# Vector embeddings
+sentence-transformers==3.3.1
+
+# Async
+aiofiles==24.1.0
+
+# Logging
+structlog==24.4.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0

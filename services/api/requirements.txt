@@ -1,0 +1,53 @@
+# FastAPI
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database
+sqlalchemy==2.0.35
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Redis
+redis==5.2.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# HTTP
+httpx==0.27.2
+requests==2.32.3
+
+# LLM / AI
+anthropic==0.38.0
+openai==1.52.0
+httpx[sse]==0.27.2
+
+# Network
+netmiko==4.1.2
+napalm==4.4.0
+easysnmp==0.2.6
+
+# Vector DB
+pgvector==0.3.0
+
+# Validation
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Utilities
+python-multipart==0.0.12
+python-dotenv==1.0.1
+pyyaml==6.0.2
+
+# Logging
+structlog==24.4.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+httpx==0.27.2
+
+# Type checking
+mypy==1.14.0

@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # POSTGRES DATABASE
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: netdiscoverit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netdiscoverit}
+      POSTGRES_USER: ${POSTGRES_USER:-netdiscoverit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netdiscoverit}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # REDIS
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: netdiscoverit-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # VAULT (for secrets)
+  # =============================================================================
+  vault:
+    image: hashicorp/vault:1.17
+    container_name: netdiscoverit-vault
+    restart: unless-stopped
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-changeme}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    volumes:
+      - vault_data:/vault/file
+    cap_add:
+      - IPC_LOCK
+
+  # =============================================================================
+  # OLLAMA (local LLM)
+  # =============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: netdiscoverit-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+
+  # =============================================================================
+  # API SERVICE (FastAPI)
+  # =============================================================================
+  api:
+    build:
+      context: ./docker/api
+      dockerfile: Dockerfile
+    container_name: netdiscoverit-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-netdiscoverit}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-netdiscoverit}
+      - REDIS_URL=redis://redis:6379
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN:-changeme}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-changeme-super-secret-key-min-32-chars}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme-internal-api-key}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_started
+      ollama:
+        condition: service_started
+    volumes:
+      - ./services/api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # =============================================================================
+  # FRONTEND (React)
+  # =============================================================================
+  frontend:
+    build:
+      context: ./docker/frontend
+      dockerfile: Dockerfile
+    container_name: netdiscoverit-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=${APP_API_URL:-http://localhost:8000}
+      - REACT_APP_WS_URL=ws://localhost:8000
+    depends_on:
+      - api
+
+  # =============================================================================
+  # LOCAL AGENT (for development)
+  # =============================================================================
+  agent:
+    build:
+      context: ./docker/agent
+      dockerfile: Dockerfile
+    container_name: netdiscoverit-agent
+    restart: unless-stopped
+    environment:
+      - API_KEY=${AGENT_API_KEY:-changeme}
+      - API_ENDPOINT=${AGENT_API_ENDPOINT:-http://api:8000}
+      - DISCOVERY_METHODS=${AGENT_DISCOVERY_METHODS:-ssh,snmp}
+      - SSH_TIMEOUT=${AGENT_SSH_TIMEOUT:-30}
+      - SNMP_TIMEOUT=${AGENT_SNMP_TIMEOUT:-5}
+      - SCAN_INTERVAL=${AGENT_SCAN_INTERVAL:-24h}
+      - LOG_LEVEL=${AGENT_LOG_LEVEL:-info}
+    volumes:
+      - agent_data:/app/data
+      - ./configs/agent.yaml:/app/config/agent.yaml:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  vault_data:
+  ollama_data:
+  agent_data:
+
+networks:
+  default:
+    name: netdiscoverit-network

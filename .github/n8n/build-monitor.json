@@ -1,0 +1,225 @@
+{
+  "name": "NetDiscoverIT Build Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Scheduled Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/{{$env.REPO_OWNER}}/{{$env.REPO_NAME}}/actions/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "specifyQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "id": "check_latest_build",
+      "name": "Check Latest Build",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "build_status",
+              "value": "={{ $json.workflow_runs[0].conclusion }}"
+            },
+            {
+              "name": "build_url",
+              "value": "={{ $json.workflow_runs[0].html_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "parse_status",
+      "name": "Parse Build Status",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.build_status }}",
+              "operation": "isNotEqual",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "check_failure",
+      "name": "Build Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🚨 *Build Failed!*\\nRepo: NetDiscoverIT\\nStatus: {{ $json.build_status }}\\n🔗 <{{ $json.build_url }}|View Build>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack_alert",
+      "name": "Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 3,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.build_status }}",
+              "operation": "isEqual",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "check_success",
+      "name": "Build Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "✅ *Build Succeeded!*\\nRepo: NetDiscoverIT\\n🔗 <{{ $json.build_url }}|View Build>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack_success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 3,
+      "position": [1050, 200]
+    }
+  ],
+  "connections": {
+    "Scheduled Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Latest Build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Latest Build": {
+      "main": [
+        [
+          {
+            "node": "Parse Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Build Status": {
+      "main": [
+        [
+          {
+            "node": "Build Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Failed?": {
+      "main": [
+        [
+          {
+            "node": "Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Failed?": {
+      "main": [
+        [
+          {
+            "node": "Build Success?",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Success?": {
+      "main": [
+        [
+          {
+            "node": "Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

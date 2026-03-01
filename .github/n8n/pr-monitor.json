@@ -1,0 +1,288 @@
+{
+  "name": "NetDiscoverIT Code Review Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Check for PRs",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/{{$env.REPO_OWNER}}/{{$env.REPO_NAME}}/pulls",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "specifyQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "state",
+              "value": "open"
+            },
+            {
+              "name": "sort",
+              "value": "updated"
+            },
+            {
+              "name": "per_page",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "id": "get_prs",
+      "name": "Get Open PRs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "loop_prs",
+      "name": "Loop Over PRs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{$env.REPO_OWNER}}/{{$env.REPO_NAME}}/pulls/{{ $json[0].number }}/reviews",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        }
+      },
+      "id": "get_reviews",
+      "name": "Get Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "check_reviews",
+      "name": "No Reviews?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🔍 *PR Needs Review!*\\n*Title:* {{ $json[0].title }}\\n*Author:* {{ $json[0].user.login }}\\n*URL:* {{ $json[0].html_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack_review",
+      "name": "Notify for Review",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 3,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "pr_title",
+              "value": "={{ $json[0].title }}"
+            },
+            {
+              "name": "pr_url",
+              "value": "={{ $json[0].html_url }}"
+            },
+            {
+              "name": "pr_author",
+              "value": "={{ $json[0].user.login }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set_pr_info",
+      "name": "Set PR Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1250, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.pr_title }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "has_pr",
+      "name": "Has PR Info?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "✅ *PR Merged!*\\n*Title:* {{ $json.pr_title }}\\n*Author:* {{ $json.pr_author }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack_merged",
+      "name": "Notify Merge",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 3,
+      "position": [1650, 450]
+    }
+  ],
+  "connections": {
+    "Check for PRs": {
+      "main": [
+        [
+          {
+            "node": "Get Open PRs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Open PRs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over PRs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over PRs": {
+      "main": [
+        [
+          {
+            "node": "Get Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Reviews": {
+      "main": [
+        [
+          {
+            "node": "No Reviews?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Reviews?": {
+      "main": [
+        [
+          {
+            "node": "Notify for Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Reviews?": {
+      "main": [
+        [
+          {
+            "node": "Set PR Info",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Set PR Info": {
+      "main": [
+        [
+          {
+            "node": "Has PR Info?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has PR Info?": {
+      "main": [
+        [
+          {
+            "node": "Notify Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

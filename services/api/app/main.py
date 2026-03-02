@@ -46,11 +46,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     from app.db.database import close_db
-    from app.db.neo4j import _neo4j_client
-    
+    from app.db.neo4j import close_neo4j_client
+
     await close_db()
-    if _neo4j_client:
-        await _neo4j_client.close()
+    await close_neo4j_client()
     
     logger.info("Shutting down application")
 
@@ -67,7 +66,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -24,7 +24,13 @@ class ConfigNormalizer:
         except Exception as e:
             logger.warning(f"Ollama normalization failed: {e}")
         
-        # Try cloud LLM (Anthropic)
+        # Try cloud LLM (Google Gemini)
+        try:
+            return await self._normalize_gemini(raw_config)
+        except Exception as e:
+            logger.warning(f"Gemini normalization failed: {e}")
+        
+        # Try Anthropic Claude
         try:
             return await self._normalize_anthropic(raw_config)
         except Exception as e:
@@ -63,6 +69,46 @@ Output valid JSON only, no explanations:"""
                 return json.loads(text)
             else:
                 raise Exception(f"Ollama error: {response.status_code}")
+    
+    async def _normalize_gemini(self, raw_config: str) -> Dict:
+        """Use Google Gemini for normalization"""
+        import os
+        import httpx
+        
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise Exception("GOOGLE_API_KEY not set")
+        
+        prompt = f"""Convert this network device configuration to JSON.
+Only include factual information from the config. Do not infer or add fields.
+
+Configuration:
+{raw_config[:8000]}  # Limit length
+
+Output valid JSON only, no explanations. Start your response with {{
+"""
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-pro:generateContent",
+                params={"key": api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "maxOutputTokens": 4000,
+                        "responseMimeType": "application/json"
+                    }
+                },
+                timeout=60.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                text = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+                return json.loads(text)
+            else:
+                raise Exception(f"Gemini error: {response.status_code} - {response.text}")
     
     async def _normalize_anthropic(self, raw_config: str) -> Dict:
         """Use Anthropic Claude for normalization"""

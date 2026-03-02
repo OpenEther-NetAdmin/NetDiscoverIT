@@ -6,6 +6,7 @@ uvicorn[standard]==0.32.0
 sqlalchemy==2.0.35
 asyncpg==0.30.0
 alembic==1.14.0
+neo4j==5.27.0
 
 # Redis
 redis==5.2.0

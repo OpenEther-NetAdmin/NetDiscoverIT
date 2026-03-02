@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     VECTOR_DB_PROVIDER: str = "pgvector"
     VECTOR_DIMENSION: int = 768
     
+    # Neo4j Graph Database
+    NEO4J_HOST: str = "neo4j"
+    NEO4J_PORT: int = 7687
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "changeme"
+    
+    @property
+    def NEO4J_URI(self) -> str:
+        return f"bolt://{self.NEO4J_HOST}:{self.NEO4J_PORT}"
+    
     # Logging
     LOG_LEVEL: str = "info"
     LOG_FORMAT: str = "json"

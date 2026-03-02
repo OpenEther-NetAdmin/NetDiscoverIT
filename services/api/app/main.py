@@ -25,13 +25,33 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.APP_ENV}")
     
-    # Startup
-    # await database.connect()
+    # Startup - Initialize databases
+    from app.db.database import init_db
+    from app.db.neo4j import get_neo4j_client
+    
+    try:
+        await init_db()
+        logger.info("PostgreSQL initialized")
+    except Exception as e:
+        logger.warning(f"PostgreSQL init failed: {e}")
+    
+    try:
+        neo4j = await get_neo4j_client()
+        await neo4j.create_constraints()
+        logger.info("Neo4j initialized")
+    except Exception as e:
+        logger.warning(f"Neo4j init failed: {e}")
     
     yield
     
     # Shutdown
-    # await database.disconnect()
+    from app.db.database import close_db
+    from app.db.neo4j import _neo4j_client
+    
+    await close_db()
+    if _neo4j_client:
+        await _neo4j_client.close()
+    
     logger.info("Shutting down application")
 
 

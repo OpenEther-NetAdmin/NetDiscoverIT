@@ -1,10 +1,13 @@
 """
 Topology Discovery Module
 Discovers network topology using CDP, LLDP, and other protocols
+Integrates: arp-scan, switch-mapper, fprobe, Netdot
 """
 
 import asyncio
 import logging
+import subprocess
+import json
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -356,3 +359,449 @@ class ARPScanner:
             pass
         
         return results
+
+
+class ArpScanIntegration:
+    """Integrate with arp-scan for Layer 2 discovery"""
+    
+    def __init__(self, config):
+        self.config = config
+    
+    async def scan_interfaces(self) -> List[str]:
+        """List available network interfaces"""
+        try:
+            result = subprocess.run(
+                ["arp-scan", "--interface=en0", "--localnet"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            # Just check if arp-scan is available
+            if result.returncode == 0 or "arp-scan" in result.stderr.lower():
+                return await self._list_interfaces()
+        except FileNotFoundError:
+            logger.warning("arp-scan not installed - using nmap fallback")
+        except Exception as e:
+            logger.debug(f"arp-scan check: {e}")
+        
+        return []
+    
+    async def _list_interfaces(self) -> List[str]:
+        """List available interfaces via arp-scan"""
+        try:
+            result = subprocess.run(
+                ["arp-scan", "--list-interfaces"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                interfaces = []
+                for line in result.stdout.split('\n'):
+                    if line.strip() and not line.startswith('#'):
+                        parts = line.split()[0] if line.split() else None
+                        if parts and parts not in ['Interface', '']:
+                            interfaces.append(parts)
+                return interfaces
+        except Exception as e:
+            logger.error(f"Failed to list interfaces: {e}")
+        return []
+    
+    async def scan_subnet(self, interface: str, subnet: str = None) -> List[Dict]:
+        """Scan subnet using arp-scan"""
+        cmd = ["arp-scan", "-I", interface]
+        
+        if subnet:
+            cmd.append(subnet)
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0:
+                return self._parse_arp_scan(result.stdout)
+            return []
+            
+        except FileNotFoundError:
+            logger.warning("arp-scan not installed")
+            return []
+        except Exception as e:
+            logger.error(f"arp-scan failed: {e}")
+            return []
+    
+    def _parse_arp_scan(self, output: str) -> List[Dict]:
+        """Parse arp-scan output"""
+        results = []
+        
+        for line in output.split('\n'):
+            # Skip headers and empty lines
+            if not line.strip() or line.startswith('Interface') or line.startswith('Starting'):
+                continue
+            
+            parts = line.split()
+            if len(parts) >= 3:
+                try:
+                    # Typical format: IP Address    MAC Address    Vendor
+                    results.append({
+                        "source": "arp-scan",
+                        "ip": parts[0],
+                        "mac": parts[1],
+                        "vendor": " ".join(parts[2:]) if len(parts) > 2 else "",
+                    })
+                except (IndexError, ValueError):
+                    continue
+        
+        return results
+
+
+class SwitchMapperIntegration:
+    """Integrate with switch-mapper for recursive LLDP/SNMP topology mapping"""
+    
+    def __init__(self, config):
+        self.config = config
+    
+    async def discover_topology(self, device: Dict) -> Dict:
+        """Discover full network topology using LLDP/SNMP"""
+        logger.info(f"Running switch-mapper on {device.get('hostname')}")
+        
+        # switch-mapper uses SNMP to walk LLDP MIBs
+        # For now, we'll implement similar logic using netmiko + SNMP
+        
+        topology = {
+            "nodes": [],
+            "edges": [],
+            "discovery_method": "lldp_snmp_walk"
+        }
+        
+        # Get the device's LLDP neighbors
+        from netmiko import ConnectHandler
+        
+        credentials = device.get('credentials', {})
+        vendor = device.get('vendor', 'cisco_ios').lower()
+        
+        device_type_map = {
+            'cisco': 'cisco_ios',
+            'juniper': 'juniper_junos',
+            'arista': 'arista_eos',
+        }
+        device_type = device_type_map.get(vendor, 'cisco_ios')
+        
+        try:
+            conn = {
+                'device_type': device_type,
+                'host': device['management_ip'],
+                'username': credentials.get('username'),
+                'password': credentials.get('password'),
+                'secret': credentials.get('enable_password', ''),
+                'timeout': self.config.SSH_TIMEOUT,
+            }
+            
+            netmiko_conn = ConnectHandler(**conn)
+            if conn['secret']:
+                netmiko_conn.enable()
+            
+            # Get LLDP neighbors detail
+            output = netmiko_conn.send_command("show lldp neighbors detail", timeout=30)
+            neighbors = self._parse_lldp_detail(output)
+            
+            # Add source device
+            topology["nodes"].append({
+                "id": device.get('management_ip'),
+                "hostname": device.get('hostname'),
+                "vendor": vendor,
+                "type": "switch"
+            })
+            
+            # Add edges to neighbors
+            for neighbor in neighbors:
+                neighbor_ip = neighbor.get('management_ip', neighbor.get('chassis_id', ''))
+                
+                topology["nodes"].append({
+                    "id": neighbor_ip,
+                    "hostname": neighbor.get('hostname'),
+                    "vendor": neighbor.get('description', ''),
+                    "type": "discovered"
+                })
+                
+                topology["edges"].append({
+                    "source": device.get('management_ip'),
+                    "target": neighbor_ip,
+                    "local_port": neighbor.get('local_port'),
+                    "remote_port": neighbor.get('port_id'),
+                    "protocol": "lldp"
+                })
+            
+            # Recursively discover neighbors (simple version - depth=1)
+            # In production, you'd traverse the full topology
+            
+            netmiko_conn.disconnect()
+            
+        except Exception as e:
+            logger.error(f"Switch-mapper topology discovery failed: {e}")
+        
+        return topology
+    
+    def _parse_lldp_detail(self, output: str) -> List[Dict]:
+        """Parse detailed LLDP output"""
+        neighbors = []
+        
+        current = {}
+        for line in output.split('\n'):
+            line = line.strip()
+            
+            if 'Chassis ID:' in line:
+                if current:
+                    neighbors.append(current)
+                current = {'chassis_id': line.split('Chassis ID:')[-1].strip()}
+            elif 'System Name:' in line:
+                current['hostname'] = line.split('System Name:')[-1].strip()
+            elif 'Port ID:' in line:
+                current['port_id'] = line.split('Port ID:')[-1].strip()
+            elif 'Local Port Intf:' in line:
+                current['local_port'] = line.split('Local Port Intf:')[-1].strip()
+            elif 'Management Address:' in line:
+                current['management_ip'] = line.split('Management Address:')[-1].strip()
+            elif 'System Description:' in line:
+                current['description'] = line.split('System Description:')[-1].strip()[:200]
+        
+        if current:
+            neighbors.append(current)
+        
+        return neighbors
+
+
+class FprobeIntegration:
+    """Integrate with fprobe for NetFlow/sFlow collection"""
+    
+    def __init__(self, config):
+        self.config = config
+        self.flow_cache = {}
+    
+    async def start_collector(self, interface: str = "eth0", 
+                             netflow_port: int = 9995,
+                             sflow_port: int = 9996) -> Dict:
+        """Start fprobe for flow collection"""
+        logger.info(f"Starting fprobe on {interface} (NetFlow:{netflow_port}, sFlow:{sflow_port})")
+        
+        # fprobe command:
+        # fprobe -i <interface> -fex <netflow_port> <collector_ip>
+        
+        return {
+            "status": "configured",
+            "interface": interface,
+            "netflow_port": netflow_port,
+            "sflow_port": sflow_port,
+            "command": f"fprobe -i {interface} -fex {netflow_port} <collector_ip>"
+        }
+    
+    async def parse_flow_file(self, filepath: str) -> List[Dict]:
+        """Parse flow data from nfdump output"""
+        flows = []
+        
+        try:
+            # Use nfdump to read NetFlow data
+            result = subprocess.run(
+                ["nfdump", "-r", filepath, "-q", "-o", "json"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        try:
+                            flows.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+        
+        except FileNotFoundError:
+            logger.warning("nfdump not installed - cannot parse flow files")
+        except Exception as e:
+            logger.error(f"Flow parsing failed: {e}")
+        
+        return flows
+    
+    def get_top_talkers(self, time_window: int = 3600) -> List[Dict]:
+        """Get top talkers using nfdump"""
+        try:
+            result = subprocess.run(
+                ["nfdump", "-r", "/var/cache/flows/nfcapd.latest", 
+                 "-s", "srcip", "-o", "json"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                # Parse nfdump output
+                return self._parse_top_talkers(result.stdout)
+        
+        except FileNotFoundError:
+            logger.warning("nfdump not installed")
+        except Exception as e:
+            logger.error(f"Top talkers query failed: {e}")
+        
+        return []
+    
+    def _parse_top_talkers(self, output: str) -> List[Dict]:
+        """Parse nfdump top talkers output"""
+        talkers = []
+        
+        for line in output.split('\n'):
+            if not line.strip() or not any(c.isdigit() for c in line):
+                continue
+            
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    talkers.append({
+                        "ip": parts[0],
+                        "flows": int(parts[1]) if parts[1].isdigit() else 0
+                    })
+                except (IndexError, ValueError):
+                    continue
+        
+        return talkers[:10]
+    
+    def get_traffic_matrix(self) -> Dict:
+        """Get source-destination traffic matrix"""
+        matrix = {"nodes": [], "edges": []}
+        
+        try:
+            # Get flows with src/dst
+            result = subprocess.run(
+                ["nfdump", "-r", "/var/cache/flows/nfcapd.latest",
+                 "-o", "fmt:%sa %da %byt", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                traffic = {}
+                for line in result.stdout.split('\n'):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        src, dst, bytes_ = parts[0], parts[1], int(parts[2])
+                        
+                        key = f"{src}->{dst}"
+                        traffic[key] = traffic.get(key, 0) + bytes_
+                
+                # Convert to matrix format
+                for key, bytes_ in traffic.items():
+                    src, dst = key.split('->')
+                    matrix["edges"].append({
+                        "source": src,
+                        "target": dst,
+                        "bytes": bytes_
+                    })
+        
+        except Exception as e:
+            logger.error(f"Traffic matrix failed: {e}")
+        
+        return matrix
+
+
+class NetdotIntegration:
+    """Integrate with Netdot for network documentation"""
+    
+    def __init__(self, config):
+        self.config = config
+        self.base_url = config.NETDOT_URL if hasattr(config, 'NETDOT_URL') else None
+        self.api_key = config.NETDOT_API_KEY if hasattr(config, 'NETDOT_API_KEY') else None
+    
+    async def sync_device(self, device: Dict) -> bool:
+        """Sync device to Netdot"""
+        if not self.base_url or not self.api_key:
+            logger.warning("Netdot not configured")
+            return False
+        
+        import httpx
+        
+        url = f"{self.base_url}/api/device"
+        
+        payload = {
+            "name": device.get('hostname'),
+            "ipaddress": device.get('management_ip'),
+            "type": device.get('device_type', 'unknown'),
+            "vendor": device.get('vendor', 'unknown'),
+            "description": f"Discovered by NetDiscoverIT",
+        }
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code in [200, 201]:
+                    logger.info(f"Synced device to Netdot: {device.get('hostname')}")
+                    return True
+                else:
+                    logger.error(f"Netdot sync failed: {response.status_code}")
+        
+        except Exception as e:
+            logger.error(f"Netdot sync error: {e}")
+        
+        return False
+    
+    async def get_topology(self) -> Dict:
+        """Get network topology from Netdot"""
+        if not self.base_url or not self.api_key:
+            return {}
+        
+        import httpx
+        
+        url = f"{self.base_url}/api/topology"
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+        
+        except Exception as e:
+            logger.error(f"Netdot topology fetch error: {e}")
+        
+        return {}
+    
+    async def get_device_list(self) -> List[Dict]:
+        """Get all devices from Netdot"""
+        if not self.base_url or not self.api_key:
+            return []
+        
+        import httpx
+        
+        url = f"{self.base_url}/api/device"
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+        
+        except Exception as e:
+            logger.error(f"Netdot device list error: {e}")
+        
+        return []

@@ -10,6 +10,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     snmp \
     libsnmp-dev \
+    # Network discovery tools
+    nmap \
+    # ARP scanning
+    arp-scan \
+    # Flow collection (fprobe, nfdump)
+    fprobe \
+    nfdump \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching

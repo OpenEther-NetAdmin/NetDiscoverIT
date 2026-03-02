@@ -10,7 +10,7 @@ from sqlalchemy import (
     TypeDecorator, UniqueConstraint, Index, func, inet, macaddr, text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, backref, declarative_base
 from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
@@ -62,9 +62,24 @@ class Organization(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False)
     settings = Column(JSONB, default=dict)
-    # Per-org API key for local agent authentication (stored as bcrypt hash — never plaintext).
-    # The local agent sends X-Agent-Key: <plaintext>; middleware hashes and compares.
-    agent_api_key_hash = Column(String(255))
+
+    # MSP/multi-org hierarchy — parent_org_id is set on CUSTOMER orgs managed by an MSP.
+    # The MSP org itself has is_msp=True and parent_org_id=None.
+    # To query all managed customer orgs: select(Organization).where(Organization.parent_org_id == msp_org_id)
+    parent_org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"))
+    is_msp = Column(Boolean, default=False)
+
+    # Subscription — controls feature gating and device limits.
+    subscription_tier = Column(String(50), default="starter")  # starter, professional, enterprise
+    max_devices = Column(Integer, default=25)  # plan limit; -1 = unlimited
+    feature_flags = Column(JSONB, default=dict)
+    # e.g. {"containerlab": true, "acl_vault": true, "scheduled_reports": true, "msp_portal": true}
+    billing_cycle_start = Column(DateTime(timezone=True))
+
+    # Data lifecycle — configurable per org for GDPR compliance (90/180/365 days; -1 = unlimited).
+    # Drives Celery data retention cleanup tasks.
+    data_retention_days = Column(Integer, default=90)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -74,6 +89,16 @@ class Organization(Base):
     discoveries = relationship("Discovery", back_populates="organization", cascade="all, delete-orphan")
     credentials = relationship("Credential", back_populates="organization", cascade="all, delete-orphan")
     integrations = relationship("IntegrationConfig", back_populates="organization", cascade="all, delete-orphan")
+    local_agents = relationship("LocalAgent", back_populates="organization", cascade="all, delete-orphan")
+    sites = relationship("Site", back_populates="organization", cascade="all, delete-orphan")
+    audit_logs = relationship("AuditLog", back_populates="organization", cascade="all, delete-orphan")
+    alert_rules = relationship("AlertRule", back_populates="organization", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_organizations_parent_org_id", "parent_org_id"),
+        Index("idx_organizations_is_msp", "is_msp"),
+        Index("idx_organizations_subscription_tier", "subscription_tier"),
+    )
 
 
 class User(Base):
@@ -130,6 +155,10 @@ class Device(Base):
     last_seen = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
 
+    # Site and agent assignment — which physical site and which local agent last collected this device
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="SET NULL"))
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+
     # ML vector embeddings (768-dim, populated by the vectorizer pipeline)
     # Used for: semantic search, role classification, topology similarity, RAG
     role_vector = Column(Vector(768))      # device functional role fingerprint
@@ -141,6 +170,7 @@ class Device(Base):
     organization = relationship("Organization", back_populates="devices")
     interfaces = relationship("Interface", back_populates="device", cascade="all, delete-orphan")
     configurations = relationship("Configuration", back_populates="device", cascade="all, delete-orphan")
+    site = relationship("Site", back_populates="devices")
 
     __table_args__ = (
         Index("idx_devices_organization_id", "organization_id"),
@@ -150,6 +180,8 @@ class Device(Base):
         Index("idx_devices_vendor", "vendor"),
         Index("idx_devices_device_type", "device_type"),
         Index("idx_devices_last_seen", "last_seen"),
+        Index("idx_devices_site_id", "site_id"),
+        Index("idx_devices_agent_id", "agent_id"),
         Index("idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"),
         # Partial unique index: only one active record per org+IP pair
         UniqueConstraint(
@@ -317,6 +349,339 @@ class Credential(Base):
     __table_args__ = (
         Index("idx_credentials_organization_id", "organization_id"),
         Index("idx_credentials_credential_type", "credential_type"),
+    )
+
+
+class Site(Base):
+    """
+    Physical or logical network site (location grouping).
+
+    Groups devices and local agents by location. Enables site-scoped topology
+    views, compliance reports, and alert routing.
+
+    site_type values:
+      on_premises, branch, datacenter, cloud_aws, cloud_azure, cloud_gcp, colocation
+    """
+    __tablename__ = "sites"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(255), nullable=False)  # "HQ - Nashville", "Branch - Dallas", "AWS us-east-1"
+    description = Column(Text)
+    site_type = Column(String(50), default="on_premises")
+    location_address = Column(String(500))      # physical address (optional, human reference only)
+    timezone = Column(String(100), default="UTC")
+    metadata = Column(JSONB, default=dict)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    organization = relationship("Organization", back_populates="sites")
+    local_agents = relationship("LocalAgent", back_populates="site")
+    devices = relationship("Device", back_populates="site")
+
+    __table_args__ = (
+        Index("idx_sites_organization_id", "organization_id"),
+        Index("idx_sites_site_type", "site_type"),
+        UniqueConstraint("organization_id", "name", name="uq_sites_org_name"),
+    )
+
+
+class LocalAgent(Base):
+    """
+    On-premises local agent registration.
+
+    Each LocalAgent represents one independently running agent process at a
+    customer site. Large orgs and MSPs can run one agent per network segment/site.
+
+    Replaces the single agent_api_key_hash that was on Organization — enabling
+    multiple agents per org with per-agent telemetry and capability tracking.
+
+    Auth: the agent sends X-Agent-Key: <plaintext> in every request. The cloud
+    API middleware bcrypt-verifies against api_key_hash and loads both org_id
+    and agent_id into request context.
+
+    capabilities (JSONB): which optional modules this agent instance supports:
+      {"containerlab": true, "acl_vault": true, "snmp_v3": true, "flow_collection": true}
+    """
+    __tablename__ = "local_agents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="SET NULL"))
+
+    name = Column(String(255), nullable=False)         # "HQ Agent", "Branch-Dallas Agent"
+    api_key_hash = Column(String(255), nullable=False)  # bcrypt hash; plaintext never stored
+
+    # Telemetry — updated on every heartbeat/API call from this agent
+    agent_version = Column(String(50))
+    last_seen = Column(DateTime(timezone=True))
+    last_ip = Column(String(45))       # last observed source IP (IPv4 or IPv6)
+    is_active = Column(Boolean, default=True)
+
+    # Module capabilities reported by agent at registration and heartbeat
+    capabilities = Column(JSONB, default=dict)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    organization = relationship("Organization", back_populates="local_agents")
+    site = relationship("Site", back_populates="local_agents")
+
+    __table_args__ = (
+        Index("idx_local_agents_organization_id", "organization_id"),
+        Index("idx_local_agents_site_id", "site_id"),
+        Index("idx_local_agents_is_active", "is_active"),
+        Index("idx_local_agents_last_seen", "last_seen"),
+        UniqueConstraint("organization_id", "name", name="uq_local_agents_org_name"),
+    )
+
+
+class AuditLog(Base):
+    """
+    Platform-level user action audit trail (PCI-DSS Req 10, HIPAA, SOX).
+
+    Records every user or agent action involving sensitive data access or
+    privileged operations. This is NOT the network change log — that is
+    ChangeRecord. This table answers: "Who accessed what on the platform, when?"
+
+    action format: "<resource_type>.<verb>"
+    Examples:
+      "device.view"                — user viewed device detail
+      "credential.access"          — user retrieved a stored credential
+      "report.compliance.generate" — user generated a compliance report
+      "export.create"              — user requested a document export
+      "acl_snapshot.retrieve"      — user retrieved an ACL snapshot
+      "user.login"                 — successful authentication
+      "user.login_failed"          — failed authentication attempt
+      "api_key.rotate"             — agent API key rotated
+
+    user_id OR agent_id — exactly one will be set depending on who triggered
+    the action. resource_name is snapshotted at time of action so the record
+    remains meaningful even if the resource is later renamed or deleted.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+
+    action = Column(String(100), nullable=False)   # "device.view", "credential.access", etc.
+    resource_type = Column(String(50))             # "device", "credential", "report", etc.
+    resource_id = Column(UUID(as_uuid=True))       # ID of the affected resource
+    resource_name = Column(String(255))            # name snapshot at time of action
+
+    outcome = Column(String(20), default="success")  # success, failure, denied
+    details = Column(JSONB, default=dict)             # action-specific context
+
+    ip_address = Column(String(45))
+    user_agent = Column(String(500))
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    organization = relationship("Organization", back_populates="audit_logs")
+
+    __table_args__ = (
+        Index("idx_audit_logs_organization_id", "organization_id"),
+        Index("idx_audit_logs_user_id", "user_id"),
+        Index("idx_audit_logs_agent_id", "agent_id"),
+        Index("idx_audit_logs_action", "action"),
+        Index("idx_audit_logs_resource_type_id", "resource_type", "resource_id"),
+        Index("idx_audit_logs_timestamp", "timestamp"),
+        Index("idx_audit_logs_outcome", "outcome"),
+    )
+
+
+class AlertRule(Base):
+    """
+    Configurable alert rule evaluated on each agent collection cycle.
+
+    rule_type values:
+      config_drift          — config_hash changed outside an approved ChangeRecord window (PCI 11.5)
+      new_device            — previously unknown device appeared on the network
+      device_offline        — device not seen for > conditions["threshold_minutes"]
+      interface_down        — interface transitioned to down state
+      security_regression   — security posture metric changed adversely (e.g. telnet re-enabled)
+      agent_offline         — local agent hasn't sent a heartbeat for > threshold_minutes
+      compliance_scope_change — device compliance_scope tags were modified
+
+    conditions (JSONB): rule-specific thresholds and filters, e.g.:
+      config_drift:       {"grace_period_minutes": 60}
+      device_offline:     {"threshold_minutes": 30}
+      interface_down:     {"interface_name_pattern": "Gi.*"}
+      security_regression:{"metrics": ["telnet_enabled", "snmp_v1_enabled"]}
+      agent_offline:      {"threshold_minutes": 15}
+
+    notify_integration_ids: list of IntegrationConfig UUIDs to route fired alerts to.
+    site_ids / device_ids: empty list means org-wide scope.
+    """
+    __tablename__ = "alert_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    name = Column(String(255), nullable=False)
+    rule_type = Column(String(50), nullable=False)
+    conditions = Column(JSONB, default=dict)
+    severity = Column(String(20), default="medium")  # info, low, medium, high, critical
+
+    notify_integration_ids = Column(JSONB, default=list)  # list of IntegrationConfig UUIDs
+    site_ids = Column(JSONB, default=list)    # empty = all sites
+    device_ids = Column(JSONB, default=list)  # empty = all devices
+
+    is_enabled = Column(Boolean, default=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    organization = relationship("Organization", back_populates="alert_rules")
+    events = relationship("AlertEvent", back_populates="rule", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_alert_rules_organization_id", "organization_id"),
+        Index("idx_alert_rules_rule_type", "rule_type"),
+        Index("idx_alert_rules_is_enabled", "is_enabled"),
+    )
+
+
+class AlertEvent(Base):
+    """
+    A fired alert instance — created when an AlertRule condition is met.
+
+    notifications_sent (JSONB): delivery status per integration, e.g.:
+      [{"integration_id": "uuid", "status": "sent", "sent_at": "2026-03-02T..."},
+       {"integration_id": "uuid", "status": "failed", "error": "timeout"}]
+
+    Config drift example:
+      rule_type: config_drift
+      title: "Unauthorized config change: core-sw-01"
+      details: {"previous_hash": "abc...", "new_hash": "def...",
+                "no_approved_change_record": true, "device_ip": "10.0.0.1"}
+    """
+    __tablename__ = "alert_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    rule_id = Column(UUID(as_uuid=True), ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False)
+    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+
+    severity = Column(String(20), nullable=False)
+    title = Column(String(500), nullable=False)
+    details = Column(JSONB, default=dict)
+    notifications_sent = Column(JSONB, default=list)
+
+    acknowledged_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    acknowledged_at = Column(DateTime(timezone=True))
+    resolved_at = Column(DateTime(timezone=True))
+    resolution_notes = Column(Text)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    rule = relationship("AlertRule", back_populates="events")
+
+    __table_args__ = (
+        Index("idx_alert_events_organization_id", "organization_id"),
+        Index("idx_alert_events_rule_id", "rule_id"),
+        Index("idx_alert_events_device_id", "device_id"),
+        Index("idx_alert_events_severity", "severity"),
+        Index("idx_alert_events_created_at", "created_at"),
+        Index("idx_alert_events_resolved_at", "resolved_at"),
+    )
+
+
+class UserOrgAccess(Base):
+    """
+    Cross-organization access grant for MSP users.
+
+    An MSP admin's home org is the MSP Organization (Organization.is_msp=True).
+    This table grants them access to specific customer orgs with a scoped role.
+
+    API authorization logic:
+      1. user.organization_id == requested_org_id  → allow (home org access)
+      2. UserOrgAccess(user_id, organization_id=requested_org_id) exists → allow
+      3. Otherwise → 403
+
+    access_role is scoped to the target org only — an MSP admin with "admin" here
+    does not get admin rights in their own MSP org beyond their User.role.
+
+    expires_at: use for temporary elevated access grants (vendor engagement, audit window).
+    """
+    __tablename__ = "user_org_access"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    # organization_id is the CUSTOMER org being accessed, not the user's home org
+
+    access_role = Column(String(50), nullable=False, default="read_only")
+    # read_only, editor, admin (scoped to this target org only)
+
+    granted_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    granted_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True))  # null = permanent
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "organization_id", name="uq_user_org_access"),
+        Index("idx_user_org_access_user_id", "user_id"),
+        Index("idx_user_org_access_organization_id", "organization_id"),
+        Index("idx_user_org_access_expires_at", "expires_at"),
+    )
+
+
+class ExportDocument(Base):
+    """
+    Tracks generated export documents stored in MinIO/S3.
+
+    Every export (compliance report, topology diagram, audit package, etc.) is
+    tracked here so it can be retrieved, shared, and retained as a compliance
+    artifact. Documents expire after 7 days by default; compliance packages
+    can be set to permanent retention (expires_at = null).
+
+    document_type values:
+      compliance_report, topology_diagram, inventory_export,
+      audit_package, change_report, scheduled_report
+
+    format values: pdf, docx, xlsx, drawio, vsdx, json
+
+    parameters (JSONB): what was requested, e.g.:
+      compliance_report: {"framework": "PCI-DSS", "scope": ["PCI-CDE"], "period": "2026-Q1"}
+      topology_diagram:  {"site_ids": ["uuid"], "format": "drawio", "depth": 3}
+      inventory_export:  {"include_interfaces": true, "format": "xlsx"}
+    """
+    __tablename__ = "export_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    document_type = Column(String(50), nullable=False)
+    format = Column(String(20), nullable=False)
+    parameters = Column(JSONB, default=dict)
+
+    status = Column(String(20), default="pending")  # pending, generating, completed, failed
+    error_message = Column(Text)
+
+    storage_path = Column(String(2048))   # MinIO bucket/key (e.g. "exports/org-uuid/report.pdf")
+    file_size_bytes = Column(Integer)
+
+    expires_at = Column(DateTime(timezone=True))  # null = permanent (compliance archives)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_export_documents_organization_id", "organization_id"),
+        Index("idx_export_documents_requested_by", "requested_by"),
+        Index("idx_export_documents_document_type", "document_type"),
+        Index("idx_export_documents_status", "status"),
+        Index("idx_export_documents_created_at", "created_at"),
+        Index("idx_export_documents_expires_at", "expires_at"),
     )
 
 

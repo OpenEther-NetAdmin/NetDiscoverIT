@@ -11,6 +11,9 @@ easysnmp==0.2.6
 python-nmap==0.7.1
 httpx==0.27.2
 
+# IVRE
+ivre
+
 # LLM / AI
 anthropic==0.38.0
 openai==1.52.0

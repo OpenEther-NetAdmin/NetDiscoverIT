@@ -1,7 +1,7 @@
 """
 Topology Discovery Module
 Discovers network topology using CDP, LLDP, and other protocols
-Integrates: arp-scan, switch-mapper, fprobe, Netdot
+Integrates: arp-scan, switch-mapper, fprobe
 """
 
 import asyncio

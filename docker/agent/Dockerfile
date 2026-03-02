@@ -12,11 +12,17 @@ RUN apt-get update && apt-get install -y \
     libsnmp-dev \
     # Network discovery tools
     nmap \
+    masscan \
     # ARP scanning
     arp-scan \
     # Flow collection (fprobe, nfdump)
     fprobe \
     nfdump \
+    # IVRE dependencies
+    p0f \
+    zeek \
+    # MongoDB (IVRE default backend)
+    mongodb \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching

@@ -8,9 +8,13 @@ NetDiscoverIT automatically discovers network devices, collects configurations, 
 
 ## Features
 
-- **Auto-Discovery** — SSH/SNMP device discovery
+- **Auto-Discovery** — SSH/SNMP/NMAP/Masscan device discovery
+- **Topology Mapping** — CDP/LLDP neighbor discovery, arp-scan, switch-mapper
+- **Flow Analysis** — NetFlow/sFlow collection via fprobe
+- **IVRE Integration** — Full network recon framework (Nmap/Masscan/Zeek/p0f)
 - **AI Documentation** — Config → JSON → dynamic diagrams
 - **ML Classification** — Automatically determines device roles
+- **Graph Visualization** — Neo4j-powered topology maps
 - **Path Visualizer** — Interactive src/dst path tracing
 - **Privacy-First** — Local agent keeps data on-prem
 
@@ -55,8 +59,11 @@ docker-compose -f docker-compose.prod.yml up -d
 ├─────────────────────┤     ├─────────────────────┤
 │  - Collector        │     │  - API (FastAPI)    │
 │  - Normalizer       │────▶│  - PostgreSQL       │
-│  - Sanitizer        │     │  - Vector DB       │
-│  - Vectorizer       │     │  - React Frontend  │
+│  - Sanitizer        │     │  - Neo4j            │
+│  - Vectorizer       │     │  - Vector DB        │
+│  - NMAP/Masscan    │     │  - React Frontend   │
+│  - CDP/LLDP        │     │                     │
+│  - fprobe          │     │                     │
 └─────────────────────┘     └─────────────────────┘
 ```
 

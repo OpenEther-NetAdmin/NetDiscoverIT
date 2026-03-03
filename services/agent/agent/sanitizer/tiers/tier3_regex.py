@@ -17,23 +17,26 @@ class AggressiveRegexSanitizer:
     # Patterns: (regex, token_type, description)
     PATTERNS: List[Tuple[re.Pattern, TokenType, str]] = [
         # IPv4 addresses
-        (re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'), 
+        (re.compile(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'),
          TokenType.IPV4, "IPv4 address"),
-        
+
+        # IPv6 addresses
+        (re.compile(r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'), TokenType.IPV6, "IPv6 address"),
+
         # Passwords (various forms)
         (re.compile(r'password\s+(\S+)', re.IGNORECASE), TokenType.PASSWORD, "password"),
         (re.compile(r'secret\s+(\d\s+)?(\S+)', re.IGNORECASE), TokenType.SECRET, "secret"),
-        
+
         # SNMP communities
         (re.compile(r'snmp-server community\s+(\S+)', re.IGNORECASE), TokenType.COMMUNITY, "SNMP community"),
         (re.compile(r'community\s+(\S+)', re.IGNORECASE), TokenType.COMMUNITY, "community"),
-        
+
         # BGP AS numbers
         (re.compile(r'router\s+bgp\s+(\d+)', re.IGNORECASE), TokenType.BGP_AS, "BGP AS"),
-        
+
         # VLAN IDs
         (re.compile(r'vlan\s+(\d+)', re.IGNORECASE), TokenType.VLAN_ID, "VLAN"),
-        
+
         # MAC addresses (various formats)
         (re.compile(r'(?:[0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4}'), TokenType.MAC_ADDRESS, "MAC address"),
         (re.compile(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'), TokenType.MAC_ADDRESS, "MAC address"),
@@ -58,7 +61,7 @@ class AggressiveRegexSanitizer:
                     groups = match.groups()
                     original = next((g for g in groups if g is not None), match.group(0)) if groups else match.group(0)
                     token = self.token_mapper.get_token(token_type)
-                    
+
                     redactions.append({
                         "data_type": token_type.value,
                         "line": line_num,
@@ -66,8 +69,23 @@ class AggressiveRegexSanitizer:
                         "token": token,
                         "tier": 3
                     })
-                    
-                    sanitized_line = sanitized_line[:match.start()] + token + sanitized_line[match.end():]
+
+                    if match.groups():
+                        # Replace only the captured group, preserving prefix
+                        # Find the last non-None group (the actual value to redact)
+                        groups = match.groups()
+                        group_index = next(
+                            (i for i in range(len(groups), 0, -1) if groups[i-1] is not None),
+                            0
+                        )
+                        sanitized_line = (
+                            sanitized_line[:match.start(group_index)] +
+                            token +
+                            sanitized_line[match.end(group_index):]
+                        )
+                    else:
+                        # No groups - replace entire match (for IP, MAC patterns)
+                        sanitized_line = sanitized_line[:match.start()] + token + sanitized_line[match.end():]
             
             sanitized_lines.append(sanitized_line)
         

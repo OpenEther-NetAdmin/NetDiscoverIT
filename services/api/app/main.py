@@ -31,9 +31,9 @@ async def lifespan(app: FastAPI):
     
     try:
         await init_db()
-        logger.info("PostgreSQL initialized")
+        logger.info("Database migrations completed successfully")
     except Exception as e:
-        logger.warning(f"PostgreSQL init failed: {e}")
+        logger.warning(f"Database migration failed: {e}")
     
     try:
         neo4j = await get_neo4j_client()

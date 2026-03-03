@@ -76,8 +76,8 @@ services:
   # =============================================================================
   api:
     build:
-      context: ./docker/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/api/Dockerfile
     container_name: netdiscoverit-api
     restart: unless-stopped
     ports:
@@ -94,6 +94,8 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:-changeme-internal-api-key}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_ENCRYPTION_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,8 +114,8 @@ services:
   # =============================================================================
   frontend:
     build:
-      context: ./docker/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/frontend/Dockerfile
     container_name: netdiscoverit-frontend
     restart: unless-stopped
     ports:
@@ -150,8 +152,8 @@ services:
   # =============================================================================
   agent:
     build:
-      context: ./docker/agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: docker/agent/Dockerfile
     container_name: netdiscoverit-agent
     restart: unless-stopped
     environment:

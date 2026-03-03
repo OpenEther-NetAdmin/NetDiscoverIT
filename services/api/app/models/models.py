@@ -3,17 +3,23 @@ Database Models - PostgreSQL
 Based on net-discit database-schemas.md
 """
 
+print("models.py: starting")
 from datetime import datetime
 from uuid import uuid4
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, DateTime, ForeignKey,
-    TypeDecorator, UniqueConstraint, Index, func, inet, macaddr, text,
+    TypeDecorator, UniqueConstraint, Index, func, text,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship, backref, declarative_base
+from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, MACADDR
+from sqlalchemy.orm import relationship, backref, DeclarativeBase
 from pgvector.sqlalchemy import Vector
 
-Base = declarative_base()
+print("models.py: imports ok")
+
+class Base(DeclarativeBase):
+    pass
+
+print("models.py: Base ok")
 
 # ---------------------------------------------------------------------------
 # Fernet-based encrypted text column
@@ -134,8 +140,8 @@ class Device(Base):
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="SET NULL"))
     hostname = Column(String(255))
-    ip_address = Column(inet, nullable=False)
-    mac_address = Column(macaddr)
+    ip_address = Column(INET, nullable=False)
+    mac_address = Column(MACADDR)
     vendor = Column(String(100))
     model = Column(String(100))
     os_type = Column(String(50))
@@ -184,9 +190,10 @@ class Device(Base):
         Index("idx_devices_agent_id", "agent_id"),
         Index("idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"),
         # Partial unique index: only one active record per org+IP pair
-        UniqueConstraint(
+        Index(
+            "uq_devices_org_ip_active",
             "organization_id", "ip_address",
-            name="uq_devices_org_ip_active",
+            unique=True,
             postgresql_where=text("is_active = true"),
         ),
     )
@@ -200,9 +207,9 @@ class Interface(Base):
     device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    mac_address = Column(macaddr)
-    ip_address = Column(inet)
-    subnet_mask = Column(inet)
+    mac_address = Column(MACADDR)
+    ip_address = Column(INET)
+    subnet_mask = Column(INET)
     status = Column(String(20), default="unknown")       # up, down, testing, unknown
     admin_status = Column(String(20), default="unknown") # up, down, testing, unknown
     speed = Column(Integer)  # Mbps

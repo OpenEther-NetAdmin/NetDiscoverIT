@@ -27,8 +27,8 @@ anthropic==0.38.0
 openai==1.52.0
 
 # Network
-netmiko==4.1.2
-napalm==4.4.0
+netmiko==4.4.0
+napalm==5.1.0
 easysnmp==0.2.6
 
 # Vector DB

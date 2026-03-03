@@ -38,31 +38,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Initialize database tables and vector indexes."""
-    async with engine.begin() as conn:
-        # Enable pgvector extension before creating tables
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.run_sync(Base.metadata.create_all)
-
-        # HNSW indexes for the 4 Device vector columns.
-        # HNSW is preferred over IVFFlat for 768-dim embeddings: better recall (95-99%),
-        # no training phase, supports live inserts, and consistent performance.
-        # m=16 (graph connections per layer), ef_construction=64 (build-time quality).
-        # Cosine similarity matches sentence-transformer / text-embedding output space.
-        hnsw_indexes = [
-            ("idx_devices_role_vector",     "role_vector"),
-            ("idx_devices_topology_vector", "topology_vector"),
-            ("idx_devices_security_vector", "security_vector"),
-            ("idx_devices_config_vector",   "config_vector"),
-        ]
-        for idx_name, column in hnsw_indexes:
-            await conn.execute(text(
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON devices USING hnsw ({column} vector_cosine_ops) "
-                f"WITH (m = 16, ef_construction = 64)"
-            ))
-
-    logger.info("Database tables and HNSW vector indexes created")
+    """Initialize database using Alembic migrations."""
+    from alembic import command
+    from alembic.config import Config
+    
+    # Configure Alembic
+    alembic_cfg = Config("alembic.ini")
+    
+    # Run migrations
+    try:
+        await command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.error(f"Database migration failed: {e}")
+        raise
 
 
 async def close_db():

@@ -18,13 +18,31 @@ NetDiscoverIT automatically discovers network devices, collects configurations, 
 - **Path Visualizer** — Interactive src/dst path tracing
 - **Privacy-First** — Local agent keeps data on-prem
 
-## Quick Start
+## Database Setup
 
-### Prerequisites
+### Alembic Migrations
 
-- Docker & Docker Compose
-- PostgreSQL (managed via Docker)
-- Python 3.11+ (for local development)
+NetDiscoverIT uses Alembic for database schema management. All database changes should be made through migrations rather than direct schema modifications.
+
+#### Running Migrations
+
+```bash
+# Apply all pending migrations
+cd services/api
+alembic upgrade head
+
+# Create a new migration (after making model changes)
+alembic revision --autogenerate -m "description of changes"
+```
+
+#### Migration Files
+
+- `alembic/versions/001_initial_migration.py` - Initial schema creation
+- `alembic/versions/002_add_vector_indexes.py` - HNSW vector indexes for device embeddings
+
+#### Database Initialization
+
+The application automatically runs migrations on startup via FastAPI's lifespan events. No manual initialization is required.
 
 ### Development
 
@@ -94,6 +112,10 @@ See `.env.example` for all available variables.
 Once running, visit:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
+
+## Agent/Assistant Memory Repo(to be updated after each task completion)
+- Refer to [https://github.com/OpenEther-NetAdmin/claw-memory.git](https://github.com/OpenEther-NetAdmin/claw-memory.git) for design and implementation instructions.
+- all files are stored in /tmp/claw-memory
 
 ## License
 

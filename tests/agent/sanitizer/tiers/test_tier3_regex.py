@@ -47,3 +47,17 @@ def test_preserves_config_structure():
     assert "interface" in result.sanitized_text
     assert "GigabitEthernet0/1" in result.sanitized_text  # Interface names preserved
     assert "!" in result.sanitized_text
+
+
+def test_sanitize_secret_without_encryption_level():
+    """Test that secrets without encryption level are correctly captured (bug fix)."""
+    sanitizer = AggressiveRegexSanitizer()
+    config = "username admin secret Cisco123"
+    result = sanitizer.sanitize(config)
+    
+    assert "Cisco123" not in result.sanitized_text
+    assert "<secret>" in result.sanitized_text
+    # Verify the redaction captured the actual secret, not None
+    secret_redactions = [r for r in result.redactions if r["data_type"] == "secret"]
+    assert len(secret_redactions) == 1
+    assert secret_redactions[0]["original"] == "Cisco123"

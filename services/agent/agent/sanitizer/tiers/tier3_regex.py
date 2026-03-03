@@ -55,7 +55,8 @@ class AggressiveRegexSanitizer:
                 matches = list(pattern.finditer(sanitized_line))
                 # Replace in reverse order to preserve positions
                 for match in reversed(matches):
-                    original = match.group(1) if match.groups() else match.group(0)
+                    groups = match.groups()
+                    original = next((g for g in groups if g is not None), match.group(0)) if groups else match.group(0)
                     token = self.token_mapper.get_token(token_type)
                     
                     redactions.append({

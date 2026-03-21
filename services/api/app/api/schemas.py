@@ -375,3 +375,32 @@ class HeartbeatResponse(BaseModel):
     status: str
     agent_id: str
     last_seen: datetime
+
+
+class DeviceMetadataUpload(BaseModel):
+    """Single device metadata for batch upload"""
+    hostname: str | None = None
+    ip_address: str | None = None
+    mac_address: str | None = None
+    device_type: str | None = None
+    vendor: str | None = None
+    model: str | None = None
+    os_version: str | None = None
+    site_id: str | None = None
+    metadata: dict = {}
+    config_hash: str | None = None
+    raw_config: str | None = None
+    config_collected_at: datetime | None = None
+
+
+class AgentUploadRequest(BaseModel):
+    """Batch upload request from agent"""
+    devices: list[DeviceMetadataUpload]
+    scan_id: str | None = None
+
+
+class AgentUploadResponse(BaseModel):
+    """Upload response"""
+    uploaded: int
+    updated: int
+    errors: list[str]

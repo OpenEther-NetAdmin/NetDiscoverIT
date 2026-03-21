@@ -411,6 +411,99 @@ async def agent_heartbeat(
     )
 
 
+@router.post(
+    "/agents/{agent_id}/upload",
+    response_model=schemas.AgentUploadResponse,
+    dependencies=[Depends(dependencies.get_agent_auth)],
+)
+async def upload_agent_data(
+    agent_id: str,
+    request: schemas.AgentUploadRequest,
+    db: AsyncSession = Depends(get_db),
+    agent_auth: dict = Depends(dependencies.get_agent_auth),
+):
+    """
+    Upload device metadata batches from agent.
+    
+    Accepts device metadata collected by local agent.
+    Creates/updates Device records in cloud PostgreSQL.
+    """
+    from uuid import UUID
+    from sqlalchemy import select, func
+    from app.models.models import Device
+    
+    try:
+        agent_uuid = UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent_id format")
+    
+    org_id = UUID(agent_auth["organization_id"])
+    
+    uploaded = 0
+    updated = 0
+    errors = []
+    
+    for device_data in request.devices:
+        try:
+            existing = None
+            if device_data.ip_address:
+                result = await db.execute(
+                    select(Device).where(
+                        Device.organization_id == org_id,
+                        Device.ip_address == device_data.ip_address
+                    )
+                )
+                existing = result.scalar_one_or_none()
+            
+            if existing:
+                for field, value in {
+                    "hostname": device_data.hostname,
+                    "mac_address": device_data.mac_address,
+                    "device_type": device_data.device_type,
+                    "vendor": device_data.vendor,
+                    "model": device_data.model,
+                    "os_version": device_data.os_version,
+                    "metadata": device_data.metadata,
+                    "config_hash": device_data.config_hash,
+                    "last_seen": func.now(),
+                }.items():
+                    if value is not None:
+                        setattr(existing, field, value)
+                updated += 1
+            else:
+                new_device = Device(
+                    id=uuid4(),
+                    organization_id=org_id,
+                    site_id=UUID(device_data.site_id) if device_data.site_id else None,
+                    hostname=device_data.hostname,
+                    ip_address=device_data.ip_address,
+                    mac_address=device_data.mac_address,
+                    device_type=device_data.device_type,
+                    vendor=device_data.vendor,
+                    model=device_data.model,
+                    os_version=device_data.os_version,
+                    metadata=device_data.metadata,
+                    config_hash=device_data.config_hash,
+                    discovered_at=func.now(),
+                    last_seen=func.now(),
+                )
+                db.add(new_device)
+                uploaded += 1
+            
+        except Exception as e:
+            errors.append(f"Device {device_data.hostname or device_data.ip_address}: {str(e)}")
+    
+    await db.commit()
+    
+    return schemas.AgentUploadResponse(
+        uploaded=uploaded,
+        updated=updated,
+        errors=errors,
+    )
+
+
+# =============================================================================
+# PATH VISUALIZER
 # =============================================================================
 # PATH VISUALIZER
 # =============================================================================

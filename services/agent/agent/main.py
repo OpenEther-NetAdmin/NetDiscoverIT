@@ -20,6 +20,7 @@ from agent.vectorizer import DeviceVectorizer
 from agent.uploader import VectorUploader
 from agent.scheduler import DiscoveryScheduler
 from agent.config import AgentConfig
+from agent.db.schema import LocalAgentDB
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +55,7 @@ class Agent:
         self.vectorizer = DeviceVectorizer(config)
         self.uploader = VectorUploader(config)
         self.scheduler = DiscoveryScheduler(config)
+        self.db = LocalAgentDB(config.db_path)
     
     async def run_discovery(self) -> dict:
         """Run a single discovery cycle"""
@@ -95,6 +97,24 @@ class Agent:
             except Exception as e:
                 logger.error(f"Failed to sanitize config for {hostname}: {e}")
         
+        # 4b. Store locally in SQLite
+        logger.info("Phase 4b: Storing devices in local DB")
+        for device in devices:
+            try:
+                await self.db.upsert_device({
+                    'agent_id': getattr(self.config, 'agent_id', 'local'),
+                    'hostname': device.get('hostname'),
+                    'ip_address': device.get('ip_address'),
+                    'mac_address': device.get('mac_address'),
+                    'device_type': device.get('device_type'),
+                    'vendor': device.get('vendor'),
+                    'model': device.get('model'),
+                    'os_version': device.get('os_version'),
+                    'metadata': sanitized.get(device.get('hostname', ''), {}),
+                })
+            except Exception as e:
+                logger.error(f"Failed to store device {device.get('hostname')}: {e}")
+        
         # 5. Generate vectors
         logger.info("Phase 5: Vector generation")
         vectors = []
@@ -135,7 +155,12 @@ async def main():
     config = AgentConfig.from_file(args.config)
     logger.info(f"Starting NetDiscoverIT Agent v{config.VERSION}")
     
+    # Initialize agent
     agent = Agent(config)
+    
+    # Initialize local DB
+    await agent.db.init_db()
+    logger.info("Local database initialized")
     
     if args.once:
         # Run once

@@ -155,6 +155,44 @@ class CredentialResponse(CredentialBase):
         from_attributes = True
 
 
+class IntegrationType(str, Enum):
+    """Integration types"""
+    SERVICENOW = "servicenow"
+    JIRA = "jira"
+    SLACK = "slack"
+    TEAMS = "teams"
+    PAGERDUTY = "pagerduty"
+    OPSGENIE = "opsgenie"
+    GITHUB = "github"
+    ZENDESK = "zendesk"
+
+
+class IntegrationConfigBase(BaseModel):
+    """Base integration config schema"""
+    integration_type: IntegrationType
+    name: str
+    base_url: str | None = None
+    config: dict = {}
+
+
+class IntegrationConfigCreate(IntegrationConfigBase):
+    """Integration config creation (includes credentials)"""
+    credentials: dict  # Will be encrypted
+    webhook_secret: str | None = None
+
+
+class IntegrationConfigResponse(IntegrationConfigBase):
+    """Integration config response (excludes secrets)"""
+    id: str
+    organization_id: str
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class VectorData(BaseModel):
     """Vector data for a device"""
     device_role: List[float]

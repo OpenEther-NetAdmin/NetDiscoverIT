@@ -7,8 +7,18 @@ print("models.py: starting")
 from datetime import datetime
 from uuid import uuid4
 from sqlalchemy import (
-    Column, String, Text, Integer, Boolean, DateTime, ForeignKey,
-    TypeDecorator, UniqueConstraint, Index, func, text,
+    Column,
+    String,
+    Text,
+    Integer,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    TypeDecorator,
+    UniqueConstraint,
+    Index,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, MACADDR
 from sqlalchemy.orm import relationship, backref, DeclarativeBase
@@ -16,8 +26,10 @@ from pgvector.sqlalchemy import Vector
 
 print("models.py: imports ok")
 
+
 class Base(DeclarativeBase):
     pass
+
 
 print("models.py: Base ok")
 
@@ -33,6 +45,7 @@ def _get_fernet():
     if _fernet is None:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         _fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
     return _fernet
 
@@ -42,6 +55,7 @@ class EncryptedText(TypeDecorator):
     Transparent AES-128-CBC + HMAC-SHA256 encryption via cryptography.fernet.
     Values are encrypted before being written to the DB and decrypted on read.
     """
+
     impl = Text
     cache_ok = True
 
@@ -60,8 +74,10 @@ class EncryptedText(TypeDecorator):
 # Models
 # ---------------------------------------------------------------------------
 
+
 class Organization(Base):
     """Organization model"""
+
     __tablename__ = "organizations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -72,11 +88,15 @@ class Organization(Base):
     # MSP/multi-org hierarchy — parent_org_id is set on CUSTOMER orgs managed by an MSP.
     # The MSP org itself has is_msp=True and parent_org_id=None.
     # To query all managed customer orgs: select(Organization).where(Organization.parent_org_id == msp_org_id)
-    parent_org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"))
+    parent_org_id = Column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL")
+    )
     is_msp = Column(Boolean, default=False)
 
     # Subscription — controls feature gating and device limits.
-    subscription_tier = Column(String(50), default="starter")  # starter, professional, enterprise
+    subscription_tier = Column(
+        String(50), default="starter"
+    )  # starter, professional, enterprise
     max_devices = Column(Integer, default=25)  # plan limit; -1 = unlimited
     feature_flags = Column(JSONB, default=dict)
     # e.g. {"containerlab": true, "acl_vault": true, "scheduled_reports": true, "msp_portal": true}
@@ -87,18 +107,38 @@ class Organization(Base):
     data_retention_days = Column(Integer, default=90)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
-    users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
-    devices = relationship("Device", back_populates="organization", cascade="all, delete-orphan")
-    discoveries = relationship("Discovery", back_populates="organization", cascade="all, delete-orphan")
-    credentials = relationship("Credential", back_populates="organization", cascade="all, delete-orphan")
-    integrations = relationship("IntegrationConfig", back_populates="organization", cascade="all, delete-orphan")
-    local_agents = relationship("LocalAgent", back_populates="organization", cascade="all, delete-orphan")
-    sites = relationship("Site", back_populates="organization", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="organization", cascade="all, delete-orphan")
-    alert_rules = relationship("AlertRule", back_populates="organization", cascade="all, delete-orphan")
+    users = relationship(
+        "User", back_populates="organization", cascade="all, delete-orphan"
+    )
+    devices = relationship(
+        "Device", back_populates="organization", cascade="all, delete-orphan"
+    )
+    discoveries = relationship(
+        "Discovery", back_populates="organization", cascade="all, delete-orphan"
+    )
+    credentials = relationship(
+        "Credential", back_populates="organization", cascade="all, delete-orphan"
+    )
+    integrations = relationship(
+        "IntegrationConfig", back_populates="organization", cascade="all, delete-orphan"
+    )
+    local_agents = relationship(
+        "LocalAgent", back_populates="organization", cascade="all, delete-orphan"
+    )
+    sites = relationship(
+        "Site", back_populates="organization", cascade="all, delete-orphan"
+    )
+    audit_logs = relationship(
+        "AuditLog", back_populates="organization", cascade="all, delete-orphan"
+    )
+    alert_rules = relationship(
+        "AlertRule", back_populates="organization", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_organizations_parent_org_id", "parent_org_id"),
@@ -109,10 +149,15 @@ class Organization(Base):
 
 class User(Base):
     """User model"""
+
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     email = Column(String(255), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255))
@@ -120,7 +165,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
@@ -134,10 +181,15 @@ class User(Base):
 
 class Device(Base):
     """Device model"""
+
     __tablename__ = "devices"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     scan_id = Column(UUID(as_uuid=True), ForeignKey("scans.id", ondelete="SET NULL"))
     hostname = Column(String(255))
     ip_address = Column(INET, nullable=False)
@@ -146,7 +198,9 @@ class Device(Base):
     model = Column(String(100))
     os_type = Column(String(50))
     os_version = Column(String(100))
-    device_type = Column(String(50))  # router, switch, firewall, wireless, server, unknown
+    device_type = Column(
+        String(50)
+    )  # router, switch, firewall, wireless, server, unknown
     device_role = Column(String(50))  # core, distribution, access, etc.
     serial_number = Column(String(100))
     location = Column(String(255))
@@ -163,19 +217,25 @@ class Device(Base):
 
     # Site and agent assignment — which physical site and which local agent last collected this device
     site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="SET NULL"))
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+    agent_id = Column(
+        UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL")
+    )
 
     # ML vector embeddings (768-dim, populated by the vectorizer pipeline)
     # Used for: semantic search, role classification, topology similarity, RAG
-    role_vector = Column(Vector(768))      # device functional role fingerprint
+    role_vector = Column(Vector(768))  # device functional role fingerprint
     topology_vector = Column(Vector(768))  # network position and connectivity
     security_vector = Column(Vector(768))  # security posture
-    config_vector = Column(Vector(768))    # configuration similarity search
+    config_vector = Column(Vector(768))  # configuration similarity search
 
     # Relationships
     organization = relationship("Organization", back_populates="devices")
-    interfaces = relationship("Interface", back_populates="device", cascade="all, delete-orphan")
-    configurations = relationship("Configuration", back_populates="device", cascade="all, delete-orphan")
+    interfaces = relationship(
+        "Interface", back_populates="device", cascade="all, delete-orphan"
+    )
+    configurations = relationship(
+        "Configuration", back_populates="device", cascade="all, delete-orphan"
+    )
     site = relationship("Site", back_populates="devices")
 
     __table_args__ = (
@@ -188,11 +248,14 @@ class Device(Base):
         Index("idx_devices_last_seen", "last_seen"),
         Index("idx_devices_site_id", "site_id"),
         Index("idx_devices_agent_id", "agent_id"),
-        Index("idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"),
+        Index(
+            "idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"
+        ),
         # Partial unique index: only one active record per org+IP pair
         Index(
             "uq_devices_org_ip_active",
-            "organization_id", "ip_address",
+            "organization_id",
+            "ip_address",
             unique=True,
             postgresql_where=text("is_active = true"),
         ),
@@ -201,17 +264,20 @@ class Device(Base):
 
 class Interface(Base):
     """Interface model"""
+
     __tablename__ = "interfaces"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    device_id = Column(
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
     name = Column(String(100), nullable=False)
     description = Column(Text)
     mac_address = Column(MACADDR)
     ip_address = Column(INET)
     subnet_mask = Column(INET)
-    status = Column(String(20), default="unknown")       # up, down, testing, unknown
-    admin_status = Column(String(20), default="unknown") # up, down, testing, unknown
+    status = Column(String(20), default="unknown")  # up, down, testing, unknown
+    admin_status = Column(String(20), default="unknown")  # up, down, testing, unknown
     speed = Column(Integer)  # Mbps
     duplex = Column(String(20))  # full, half, auto
     mtu = Column(Integer)
@@ -235,27 +301,38 @@ class Interface(Base):
 
 class Discovery(Base):
     """Discovery run model"""
+
     __tablename__ = "discoveries"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     name = Column(String(255), nullable=False)
     description = Column(Text)
     targets = Column(JSONB, nullable=False)  # Target networks/hosts
     scan_profile = Column(String(50), default="standard")  # standard, quick, deep
-    status = Column(String(50), default="pending")  # pending, running, completed, failed, cancelled
+    status = Column(
+        String(50), default="pending"
+    )  # pending, running, completed, failed, cancelled
     progress = Column(Integer, default=0)
     results = Column(JSONB, default=dict)
     error_message = Column(Text)
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="discoveries")
-    scans = relationship("Scan", back_populates="discovery", cascade="all, delete-orphan")
+    scans = relationship(
+        "Scan", back_populates="discovery", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_discoveries_organization_id", "organization_id"),
@@ -267,19 +344,30 @@ class Discovery(Base):
 
 class Scan(Base):
     """Individual scan within a discovery"""
+
     __tablename__ = "scans"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    discovery_id = Column(UUID(as_uuid=True), ForeignKey("discoveries.id", ondelete="CASCADE"), nullable=False)
-    scan_type = Column(String(50), nullable=False)  # nmap, snmp, ssh, api, cdp, lldp, flow
+    discovery_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("discoveries.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scan_type = Column(
+        String(50), nullable=False
+    )  # nmap, snmp, ssh, api, cdp, lldp, flow
     target = Column(String(255), nullable=False)
-    status = Column(String(50), default="pending")  # pending, running, completed, failed
+    status = Column(
+        String(50), default="pending"
+    )  # pending, running, completed, failed
     results = Column(JSONB, default=dict)
     error_message = Column(Text)
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     discovery = relationship("Discovery", back_populates="scans")
@@ -311,10 +399,13 @@ class Configuration(Base):
       - Any config text (not even sanitized)
       - ACL rules, credentials, NTP server IPs, syslog destinations, hostname values
     """
+
     __tablename__ = "configurations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    device_id = Column(
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
     config_type = Column(String(50), default="running")  # running, startup, candidate
     # SHA-256 hash of the raw config — for change detection and deduplication only.
     config_hash = Column(String(64), nullable=False)
@@ -322,8 +413,12 @@ class Configuration(Base):
     # Contains only schema-level facts (interface added/removed, BGP neighbor count changed, etc.)
     metadata_diff = Column(JSONB, default=dict)
     captured_at = Column(DateTime(timezone=True), server_default=func.now())
-    captured_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    captured_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     device = relationship("Device", back_populates="configurations")
@@ -337,18 +432,29 @@ class Configuration(Base):
 
 class Credential(Base):
     """Stored credentials — encrypted at rest via Fernet (AES-128-CBC + HMAC-SHA256)"""
+
     __tablename__ = "credentials"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     name = Column(String(255), nullable=False)
     username = Column(String(255), nullable=False)
-    encrypted_password = Column(EncryptedText, nullable=False)  # Transparently encrypted/decrypted
-    credential_type = Column(String(50), nullable=False)  # password, ssh_key, api_token, snmp_community
+    encrypted_password = Column(
+        EncryptedText, nullable=False
+    )  # Transparently encrypted/decrypted
+    credential_type = Column(
+        String(50), nullable=False
+    )  # password, ssh_key, api_token, snmp_community
     target_filter = Column(JSONB, default=dict)
     meta = Column(JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="credentials")
@@ -369,20 +475,31 @@ class Site(Base):
     site_type values:
       on_premises, branch, datacenter, cloud_aws, cloud_azure, cloud_gcp, colocation
     """
+
     __tablename__ = "sites"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
-    name = Column(String(255), nullable=False)  # "HQ - Nashville", "Branch - Dallas", "AWS us-east-1"
+    name = Column(
+        String(255), nullable=False
+    )  # "HQ - Nashville", "Branch - Dallas", "AWS us-east-1"
     description = Column(Text)
     site_type = Column(String(50), default="on_premises")
-    location_address = Column(String(500))      # physical address (optional, human reference only)
+    location_address = Column(
+        String(500)
+    )  # physical address (optional, human reference only)
     timezone = Column(String(100), default="UTC")
     meta = Column(JSONB, default=dict)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="sites")
@@ -413,26 +530,35 @@ class LocalAgent(Base):
     capabilities (JSONB): which optional modules this agent instance supports:
       {"containerlab": true, "acl_vault": true, "snmp_v3": true, "flow_collection": true}
     """
+
     __tablename__ = "local_agents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     site_id = Column(UUID(as_uuid=True), ForeignKey("sites.id", ondelete="SET NULL"))
 
-    name = Column(String(255), nullable=False)         # "HQ Agent", "Branch-Dallas Agent"
-    api_key_hash = Column(String(255), nullable=False)  # bcrypt hash; plaintext never stored
+    name = Column(String(255), nullable=False)  # "HQ Agent", "Branch-Dallas Agent"
+    api_key_hash = Column(
+        String(255), nullable=False
+    )  # bcrypt hash; plaintext never stored
 
     # Telemetry — updated on every heartbeat/API call from this agent
     agent_version = Column(String(50))
     last_seen = Column(DateTime(timezone=True))
-    last_ip = Column(String(45))       # last observed source IP (IPv4 or IPv6)
+    last_ip = Column(String(45))  # last observed source IP (IPv4 or IPv6)
     is_active = Column(Boolean, default=True)
 
     # Module capabilities reported by agent at registration and heartbeat
     capabilities = Column(JSONB, default=dict)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="local_agents")
@@ -470,24 +596,35 @@ class AuditLog(Base):
     the action. resource_name is snapshotted at time of action so the record
     remains meaningful even if the resource is later renamed or deleted.
     """
+
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+    agent_id = Column(
+        UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL")
+    )
 
-    action = Column(String(100), nullable=False)   # "device.view", "credential.access", etc.
-    resource_type = Column(String(50))             # "device", "credential", "report", etc.
-    resource_id = Column(UUID(as_uuid=True))       # ID of the affected resource
-    resource_name = Column(String(255))            # name snapshot at time of action
+    action = Column(
+        String(100), nullable=False
+    )  # "device.view", "credential.access", etc.
+    resource_type = Column(String(50))  # "device", "credential", "report", etc.
+    resource_id = Column(UUID(as_uuid=True))  # ID of the affected resource
+    resource_name = Column(String(255))  # name snapshot at time of action
 
     outcome = Column(String(20), default="success")  # success, failure, denied
-    details = Column(JSONB, default=dict)             # action-specific context
+    details = Column(JSONB, default=dict)  # action-specific context
 
     ip_address = Column(String(45))
     user_agent = Column(String(500))
-    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    timestamp = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="audit_logs")
@@ -526,28 +663,39 @@ class AlertRule(Base):
     notify_integration_ids: list of IntegrationConfig UUIDs to route fired alerts to.
     site_ids / device_ids: empty list means org-wide scope.
     """
+
     __tablename__ = "alert_rules"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     name = Column(String(255), nullable=False)
     rule_type = Column(String(50), nullable=False)
     conditions = Column(JSONB, default=dict)
     severity = Column(String(20), default="medium")  # info, low, medium, high, critical
 
-    notify_integration_ids = Column(JSONB, default=list)  # list of IntegrationConfig UUIDs
-    site_ids = Column(JSONB, default=list)    # empty = all sites
+    notify_integration_ids = Column(
+        JSONB, default=list
+    )  # list of IntegrationConfig UUIDs
+    site_ids = Column(JSONB, default=list)  # empty = all sites
     device_ids = Column(JSONB, default=list)  # empty = all devices
 
     is_enabled = Column(Boolean, default=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="alert_rules")
-    events = relationship("AlertEvent", back_populates="rule", cascade="all, delete-orphan")
+    events = relationship(
+        "AlertEvent", back_populates="rule", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_alert_rules_organization_id", "organization_id"),
@@ -570,25 +718,42 @@ class AlertEvent(Base):
       details: {"previous_hash": "abc...", "new_hash": "def...",
                 "no_approved_change_record": true, "device_ip": "10.0.0.1"}
     """
+
     __tablename__ = "alert_events"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    rule_id = Column(UUID(as_uuid=True), ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False)
-    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL"))
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("alert_rules.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    device_id = Column(
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL")
+    )
+    agent_id = Column(
+        UUID(as_uuid=True), ForeignKey("local_agents.id", ondelete="SET NULL")
+    )
 
     severity = Column(String(20), nullable=False)
     title = Column(String(500), nullable=False)
     details = Column(JSONB, default=dict)
     notifications_sent = Column(JSONB, default=list)
 
-    acknowledged_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    acknowledged_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     acknowledged_at = Column(DateTime(timezone=True))
     resolved_at = Column(DateTime(timezone=True))
     resolution_notes = Column(Text)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     # Relationships
     rule = relationship("AlertRule", back_populates="events")
@@ -620,11 +785,18 @@ class UserOrgAccess(Base):
 
     expires_at: use for temporary elevated access grants (vendor engagement, audit window).
     """
+
     __tablename__ = "user_org_access"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     # organization_id is the CUSTOMER org being accessed, not the user's home org
 
     access_role = Column(String(50), nullable=False, default="read_only")
@@ -662,23 +834,36 @@ class ExportDocument(Base):
       topology_diagram:  {"site_ids": ["uuid"], "format": "drawio", "depth": 3}
       inventory_export:  {"include_interfaces": true, "format": "xlsx"}
     """
+
     __tablename__ = "export_documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requested_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
 
     document_type = Column(String(50), nullable=False)
     format = Column(String(20), nullable=False)
     parameters = Column(JSONB, default=dict)
 
-    status = Column(String(20), default="pending")  # pending, generating, completed, failed
+    status = Column(
+        String(20), default="pending"
+    )  # pending, generating, completed, failed
     error_message = Column(Text)
 
-    storage_path = Column(String(2048))   # MinIO bucket/key (e.g. "exports/org-uuid/report.pdf")
+    storage_path = Column(
+        String(2048)
+    )  # MinIO bucket/key (e.g. "exports/org-uuid/report.pdf")
     file_size_bytes = Column(Integer)
 
-    expires_at = Column(DateTime(timezone=True))  # null = permanent (compliance archives)
+    expires_at = Column(
+        DateTime(timezone=True)
+    )  # null = permanent (compliance archives)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True))
 
@@ -729,10 +914,15 @@ class IntegrationConfig(Base):
     webhook_secret — Fernet-encrypted HMAC key for verifying inbound webhook payloads
       from the external system (e.g. ServiceNow calling us when a CAB approves).
     """
+
     __tablename__ = "integration_configs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     integration_type = Column(String(50), nullable=False)
     # servicenow, jira, slack, teams, pagerduty, opsgenie, github, zendesk, linear
@@ -756,7 +946,9 @@ class IntegrationConfig(Base):
 
     is_enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="integrations")
@@ -766,7 +958,9 @@ class IntegrationConfig(Base):
         Index("idx_integration_configs_integration_type", "integration_type"),
         Index("idx_integration_configs_is_enabled", "is_enabled"),
         # One named integration per org (prevents duplicate "Production ServiceNow" configs)
-        UniqueConstraint("organization_id", "name", name="uq_integration_configs_org_name"),
+        UniqueConstraint(
+            "organization_id", "name", name="uq_integration_configs_org_name"
+        ),
     )
 
 
@@ -793,77 +987,110 @@ class ChangeRecord(Base):
       - verification_results: post-implementation validation results
       - rollback_performed: whether rollback was triggered and outcome
     """
+
     __tablename__ = "change_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     # Human-readable change number for referencing in tickets, emails, audit reports
-    change_number = Column(String(50), unique=True, nullable=False)  # e.g. CHG-2026-0042
+    change_number = Column(
+        String(50), unique=True, nullable=False
+    )  # e.g. CHG-2026-0042
 
     # Status lifecycle
     status = Column(String(50), default="draft", nullable=False)
     # draft → pending_approval → approved → scheduled → in_progress → completed / rolled_back / failed
 
     # Change description — what is being changed and why
-    change_type = Column(String(50))  # config_change, firmware_upgrade, acl_update, routing_change, etc.
+    change_type = Column(
+        String(50)
+    )  # config_change, firmware_upgrade, acl_update, routing_change, etc.
     title = Column(String(500), nullable=False)
     description = Column(Text)
     risk_level = Column(String(20), default="medium")  # low, medium, high, critical
-    compliance_justification = Column(Text)  # Why this change is needed for compliance/security
+    compliance_justification = Column(
+        Text
+    )  # Why this change is needed for compliance/security
 
     # Affected scope
     affected_devices = Column(JSONB, default=list)  # List of device IDs in scope
-    affected_compliance_scopes = Column(JSONB, default=list)  # e.g. ["PCI-CDE", "SOX-FINANCIAL"]
+    affected_compliance_scopes = Column(
+        JSONB, default=list
+    )  # e.g. ["PCI-CDE", "SOX-FINANCIAL"]
 
     # Request
-    requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    requested_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
     scheduled_window_start = Column(DateTime(timezone=True))
     scheduled_window_end = Column(DateTime(timezone=True))
 
     # Human approval gate — mandatory, no exceptions
-    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    approved_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)
 
     # AI-generated proposed change (config sent down to local agent — never stored here)
     # We store the proposal description and hash, not the config text
-    proposed_change_description = Column(Text)  # Human-readable description of proposed change
-    proposed_change_hash = Column(String(64))   # SHA-256 of the proposed config change
+    proposed_change_description = Column(
+        Text
+    )  # Human-readable description of proposed change
+    proposed_change_hash = Column(String(64))  # SHA-256 of the proposed config change
 
     # Pre/post state hashes — cryptographic proof of what changed
-    pre_change_hash = Column(String(64))   # config_hash before change applied
+    pre_change_hash = Column(String(64))  # config_hash before change applied
     post_change_hash = Column(String(64))  # config_hash after change applied
 
     # Test/simulation evidence (ContainerLab module — optional)
     simulation_performed = Column(Boolean, default=False)
-    simulation_results = Column(JSONB, default=dict)  # pass/fail per test, convergence times, etc.
+    simulation_results = Column(
+        JSONB, default=dict
+    )  # pass/fail per test, convergence times, etc.
     simulation_passed = Column(Boolean)
 
     # Implementation record
-    implemented_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    implemented_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     implemented_at = Column(DateTime(timezone=True))
-    implementation_evidence = Column(JSONB, default=dict)  # CLI output snippets, API response codes
+    implementation_evidence = Column(
+        JSONB, default=dict
+    )  # CLI output snippets, API response codes
 
     # Post-implementation verification
-    verification_results = Column(JSONB, default=dict)  # Automated checks run after change
+    verification_results = Column(
+        JSONB, default=dict
+    )  # Automated checks run after change
     verification_passed = Column(Boolean)
 
     # Rollback
-    rollback_plan = Column(Text)         # Rollback procedure description
+    rollback_plan = Column(Text)  # Rollback procedure description
     rollback_performed = Column(Boolean, default=False)
     rollback_at = Column(DateTime(timezone=True))
     rollback_reason = Column(Text)
 
     # External ticketing system reference — populated when the change record is synced
     # to ServiceNow, JIRA, etc. Null if no integration is configured.
-    external_ticket_id = Column(String(255))    # ServiceNow sys_id, JIRA issue key, GitHub issue #
+    external_ticket_id = Column(
+        String(255)
+    )  # ServiceNow sys_id, JIRA issue key, GitHub issue #
     external_ticket_url = Column(String(2048))  # Direct link to the external ticket
-    ticket_system = Column(String(50))          # servicenow, jira, pagerduty, github, zendesk, linear
+    ticket_system = Column(
+        String(50)
+    )  # servicenow, jira, pagerduty, github, zendesk, linear
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
         Index("idx_change_records_organization_id", "organization_id"),
@@ -872,8 +1099,11 @@ class ChangeRecord(Base):
         Index("idx_change_records_requested_at", "requested_at"),
         Index("idx_change_records_approved_by", "approved_by"),
         Index("idx_change_records_external_ticket_id", "external_ticket_id"),
-        Index("idx_change_records_affected_compliance_scopes", "affected_compliance_scopes",
-              postgresql_using="gin"),
+        Index(
+            "idx_change_records_affected_compliance_scopes",
+            "affected_compliance_scopes",
+            postgresql_using="gin",
+        ),
     )
 
 
@@ -908,11 +1138,18 @@ class ACLSnapshot(Base):
       2. We return encrypted_blob + content_hmac + capture metadata
       3. Customer decrypts with their key, verifies HMAC, presents plaintext to QSA
     """
+
     __tablename__ = "acl_snapshots"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    device_id = Column(
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Content classification
     content_type = Column(String(50), nullable=False)
@@ -933,8 +1170,12 @@ class ACLSnapshot(Base):
     encryption_algorithm = Column(String(50), default="AES-256-GCM", nullable=False)
 
     # Collection metadata (plaintext — not sensitive)
-    captured_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    captured_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    captured_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    captured_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
     # Config hash links this ACL snapshot to the Configuration change record at the same point in time
     config_hash_at_capture = Column(String(64))
     compliance_scope = Column(JSONB, default=list)  # e.g. ["PCI-CDE", "PCI-BOUNDARY"]
@@ -946,28 +1187,39 @@ class ACLSnapshot(Base):
         Index("idx_acl_snapshots_device_id", "device_id"),
         Index("idx_acl_snapshots_captured_at", "captured_at"),
         Index("idx_acl_snapshots_content_type", "content_type"),
-        Index("idx_acl_snapshots_compliance_scope", "compliance_scope", postgresql_using="gin"),
+        Index(
+            "idx_acl_snapshots_compliance_scope",
+            "compliance_scope",
+            postgresql_using="gin",
+        ),
     )
 
 
 class Task(Base):
     """Celery task tracking"""
+
     __tablename__ = "tasks"
 
     id = Column(UUID(as_uuid=True), primary_key=True)
     task_name = Column(String(255), nullable=False)
     task_type = Column(String(50), nullable=False)
-    status = Column(String(50), default="pending")  # pending, running, completed, failed, cancelled
+    status = Column(
+        String(50), default="pending"
+    )  # pending, running, completed, failed, cancelled
     progress = Column(Integer, default=0)
     result = Column(JSONB, default=dict)
     error_message = Column(Text)
     parent_id = Column(UUID(as_uuid=True))
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"))
+    organization_id = Column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
         Index("idx_tasks_status", "status"),

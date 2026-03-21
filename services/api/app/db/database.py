@@ -41,10 +41,10 @@ async def init_db():
     """Initialize database using Alembic migrations."""
     from alembic import command
     from alembic.config import Config
-    
+
     # Configure Alembic
     alembic_cfg = Config("alembic.ini")
-    
+
     # Run migrations
     try:
         await command.upgrade(alembic_cfg, "head")

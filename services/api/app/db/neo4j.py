@@ -14,8 +14,7 @@ try:
     from neo4j import AsyncGraphDatabase
 except ImportError as exc:
     raise ImportError(
-        "neo4j Python driver is required but not installed. "
-        "Run: pip install neo4j"
+        "neo4j Python driver is required but not installed. " "Run: pip install neo4j"
     ) from exc
 
 
@@ -70,21 +69,24 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": str(device.get("id", uuid4())),
-                "hostname": device.get("hostname"),
-                "ip_address": str(device.get("ip_address", "")),
-                "mac_address": device.get("mac_address"),
-                "vendor": device.get("vendor"),
-                "model": device.get("model"),
-                "os_type": device.get("os_type"),
-                "os_version": device.get("os_version"),
-                "device_type": device.get("device_type"),
-                "device_role": device.get("device_role"),
-                "serial_number": device.get("serial_number"),
-                "location": device.get("location"),
-                "organization_id": str(device.get("organization_id", "")),
-            })
+            result = await session.run(
+                query,
+                {
+                    "id": str(device.get("id", uuid4())),
+                    "hostname": device.get("hostname"),
+                    "ip_address": str(device.get("ip_address", "")),
+                    "mac_address": device.get("mac_address"),
+                    "vendor": device.get("vendor"),
+                    "model": device.get("model"),
+                    "os_type": device.get("os_type"),
+                    "os_version": device.get("os_version"),
+                    "device_type": device.get("device_type"),
+                    "device_role": device.get("device_role"),
+                    "serial_number": device.get("serial_number"),
+                    "location": device.get("location"),
+                    "organization_id": str(device.get("organization_id", "")),
+                },
+            )
             record = await result.single(strict=False)
             return dict(record["d"]) if record else {}
 
@@ -111,20 +113,23 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": str(interface.get("id", uuid4())),
-                "name": interface.get("name"),
-                "description": interface.get("description"),
-                "mac_address": interface.get("mac_address"),
-                "ip_address": str(interface.get("ip_address", "")),
-                "subnet_mask": str(interface.get("subnet_mask", "")),
-                "status": interface.get("status"),
-                "admin_status": interface.get("admin_status"),
-                "speed": interface.get("speed"),
-                "duplex": interface.get("duplex"),
-                "mtu": interface.get("mtu"),
-                "vlan_id": interface.get("vlan_id"),
-            })
+            result = await session.run(
+                query,
+                {
+                    "id": str(interface.get("id", uuid4())),
+                    "name": interface.get("name"),
+                    "description": interface.get("description"),
+                    "mac_address": interface.get("mac_address"),
+                    "ip_address": str(interface.get("ip_address", "")),
+                    "subnet_mask": str(interface.get("subnet_mask", "")),
+                    "status": interface.get("status"),
+                    "admin_status": interface.get("admin_status"),
+                    "speed": interface.get("speed"),
+                    "duplex": interface.get("duplex"),
+                    "mtu": interface.get("mtu"),
+                    "vlan_id": interface.get("vlan_id"),
+                },
+            )
             record = await result.single(strict=False)
             return dict(record["i"]) if record else {}
 
@@ -145,11 +150,10 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            await session.run(query, {
-                "device_id": device_id,
-                "interface_id": interface_id,
-                "slot": slot
-            })
+            await session.run(
+                query,
+                {"device_id": device_id, "interface_id": interface_id, "slot": slot},
+            )
             return True
 
     async def create_connected_to_relationship(
@@ -158,7 +162,7 @@ class Neo4jClient:
         interface2_id: str,
         discovery_method: str = None,
         link_speed: int = None,
-        link_status: str = None
+        link_status: str = None,
     ) -> bool:
         """Create bidirectional CONNECTED_TO relationship"""
         if not self._driver:
@@ -181,13 +185,16 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            await session.run(query, {
-                "interface1_id": interface1_id,
-                "interface2_id": interface2_id,
-                "discovery_method": discovery_method,
-                "link_speed": link_speed,
-                "link_status": link_status
-            })
+            await session.run(
+                query,
+                {
+                    "interface1_id": interface1_id,
+                    "interface2_id": interface2_id,
+                    "discovery_method": discovery_method,
+                    "link_speed": link_speed,
+                    "link_status": link_status,
+                },
+            )
             return True
 
     async def create_vlan_node(self, vlan: Dict) -> Dict:
@@ -208,20 +215,27 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": str(vlan.get("id", uuid4())),
-                "vlan_id": vlan.get("vlan_id"),
-                "name": vlan.get("name"),
-                "description": vlan.get("description"),
-                "subnet": vlan.get("subnet"),
-                "gateway": vlan.get("gateway"),
-                "organization_id": str(vlan.get("organization_id", "")),
-            })
+            result = await session.run(
+                query,
+                {
+                    "id": str(vlan.get("id", uuid4())),
+                    "vlan_id": vlan.get("vlan_id"),
+                    "name": vlan.get("name"),
+                    "description": vlan.get("description"),
+                    "subnet": vlan.get("subnet"),
+                    "gateway": vlan.get("gateway"),
+                    "organization_id": str(vlan.get("organization_id", "")),
+                },
+            )
             record = await result.single(strict=False)
             return dict(record["v"]) if record else {}
 
     async def create_member_of_relationship(
-        self, interface_id: str, vlan_id: int, mode: str = "access", native: bool = False
+        self,
+        interface_id: str,
+        vlan_id: int,
+        mode: str = "access",
+        native: bool = False,
     ) -> bool:
         """Create MEMBER_OF relationship"""
         if not self._driver:
@@ -238,12 +252,15 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            await session.run(query, {
-                "interface_id": interface_id,
-                "vlan_id": vlan_id,
-                "mode": mode,
-                "native": native
-            })
+            await session.run(
+                query,
+                {
+                    "interface_id": interface_id,
+                    "vlan_id": vlan_id,
+                    "mode": mode,
+                    "native": native,
+                },
+            )
             return True
 
     async def find_path(self, source_hostname: str, dest_hostname: str) -> List[Dict]:
@@ -260,16 +277,17 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "source": source_hostname,
-                "dest": dest_hostname
-            })
+            result = await session.run(
+                query, {"source": source_hostname, "dest": dest_hostname}
+            )
             record = await result.single(strict=False)
             if record:
                 return [dict(n) for n in record["path"].nodes]
         return []
 
-    async def find_devices_in_vlan(self, vlan_id: int, organization_id: str) -> List[Dict]:
+    async def find_devices_in_vlan(
+        self, vlan_id: int, organization_id: str
+    ) -> List[Dict]:
         """Find all devices in a VLAN"""
         if not self._driver:
             raise RuntimeError("Neo4j client is not connected")
@@ -281,10 +299,9 @@ class Neo4jClient:
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "org_id": organization_id,
-                "vlan_id": vlan_id
-            })
+            result = await session.run(
+                query, {"org_id": organization_id, "vlan_id": vlan_id}
+            )
             return [dict(record) async for record in result]
 
     async def find_single_points_of_failure(self, organization_id: str) -> List[Dict]:
@@ -349,11 +366,13 @@ class Neo4jClient:
                         if i2_data["id"] not in seen_node_ids:
                             nodes.append({"type": "interface", **i2_data})
                             seen_node_ids.add(i2_data["id"])
-                        edges.append({
-                            "source": i_data["id"],
-                            "target": i2_data["id"],
-                            **dict(c_rel)
-                        })
+                        edges.append(
+                            {
+                                "source": i_data["id"],
+                                "target": i2_data["id"],
+                                **dict(c_rel),
+                            }
+                        )
 
                 if d2_node:
                     d2_data = dict(d2_node)
@@ -408,10 +427,11 @@ async def get_neo4j_client() -> Neo4jClient:
     global _neo4j_client
     if _neo4j_client is None:
         from app.core.config import settings
+
         _neo4j_client = Neo4jClient(
             uri=settings.NEO4J_URI,
             user=settings.NEO4J_USER,
-            password=settings.NEO4J_PASSWORD
+            password=settings.NEO4J_PASSWORD,
         )
         await _neo4j_client.connect()
     return _neo4j_client

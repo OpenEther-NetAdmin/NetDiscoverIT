@@ -1,9 +1,25 @@
 # Models package
 from app.models.models import (
-    Base, Organization, User, Device, Interface, Discovery, Scan,
-    Configuration, Credential, Site, LocalAgent, AuditLog, AlertRule,
-    AlertEvent, UserOrgAccess, ExportDocument, IntegrationConfig,
-    ChangeRecord, ACLSnapshot, Task
+    Base,
+    Organization,
+    User,
+    Device,
+    Interface,
+    Discovery,
+    Scan,
+    Configuration,
+    Credential,
+    Site,
+    LocalAgent,
+    AuditLog,
+    AlertRule,
+    AlertEvent,
+    UserOrgAccess,
+    ExportDocument,
+    IntegrationConfig,
+    ChangeRecord,
+    ACLSnapshot,
+    Task,
 )
 
 __all__ = [

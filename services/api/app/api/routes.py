@@ -39,13 +39,10 @@ async def list_devices(
     """List all devices for user's organization"""
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
-        select(Device)
-        .where(Device.organization_id == org_id)
-        .offset(skip)
-        .limit(limit)
+        select(Device).where(Device.organization_id == org_id).offset(skip).limit(limit)
     )
     devices = result.scalars().all()
-    
+
     return [
         schemas.Device(
             id=str(d.id),
@@ -56,7 +53,7 @@ async def list_devices(
             role=d.device_role,
             organization_id=str(d.organization_id),
             created_at=d.created_at,
-            updated_at=d.updated_at
+            updated_at=d.updated_at,
         )
         for d in devices
     ]
@@ -92,11 +89,7 @@ async def trigger_discovery(
 ):
     """Trigger a new discovery"""
     # TODO: Implement discovery logic
-    return {
-        "id": "todo",
-        "status": "pending",
-        **discovery.model_dump()
-    }
+    return {"id": "todo", "status": "pending", **discovery.model_dump()}
 
 
 @router.get("/discoveries/{discovery_id}", response_model=schemas.Discovery)
@@ -122,7 +115,7 @@ async def receive_vectors(
     return {
         "status": "received",
         "count": len(vectors.devices),
-        "agent_org": agent_context["organization_id"]
+        "agent_org": agent_context["organization_id"],
     }
 
 

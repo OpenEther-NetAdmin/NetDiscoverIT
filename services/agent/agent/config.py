@@ -42,7 +42,11 @@ class AgentConfig(BaseModel):
     
     # Logging
     LOG_LEVEL: str = "info"
-    
+
+    # Database
+    db_path: str = "/app/data/agent.db"
+    db_retention_days: int = 90
+
     # Target devices (loaded from config file)
     devices: List[dict] = []
     

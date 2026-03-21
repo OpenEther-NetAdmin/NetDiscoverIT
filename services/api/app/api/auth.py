@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta
-from uuid import uuid4
+from uuid import uuid4, UUID
+import secrets
 
 from app.core.security import (
     hash_password, verify_password, create_access_token, 
@@ -9,7 +10,8 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.db.database import get_db
-from app.models.models import User
+from app.models.models import User, LocalAgent
+from app.api.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -36,6 +38,19 @@ class UserCreate(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class AgentCreate(BaseModel):
+    name: str
+    site_id: str | None = None
+
+
+class AgentResponse(BaseModel):
+    agent_id: str
+    organization_id: str
+    name: str
+    api_key: str
+    message: str
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -120,7 +135,42 @@ async def refresh_token(
     
     return TokenResponse(
         access_token=access_token,
-        refresh_token=new_refresh_token
+        refresh_token=refresh_token
+    )
+
+
+@router.post("/agent/register", response_model=AgentResponse)
+async def register_agent(
+    agent_data: AgentCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Register a new agent for the organization"""
+    api_key = f"ndi_agent_{secrets.token_urlsafe(32)}"
+    
+    org_id = UUID(current_user.organization_id)
+    site_uuid = UUID(agent_data.site_id) if agent_data.site_id else None
+    
+    agent = LocalAgent(
+        id=uuid4(),
+        organization_id=org_id,
+        site_id=site_uuid,
+        name=agent_data.name,
+        api_key_hash=hash_password(api_key),
+        is_active=True,
+        capabilities={}
+    )
+    
+    db.add(agent)
+    await db.commit()
+    await db.refresh(agent)
+    
+    return AgentResponse(
+        agent_id=str(agent.id),
+        organization_id=str(agent.organization_id),
+        name=agent.name,
+        api_key=api_key,
+        message="Save this API key - it won't be shown again"
     )
 
 

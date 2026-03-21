@@ -122,6 +122,39 @@ class DeviceMetadata(BaseModel):
     metadata: dict = {}
 
 
+class CredentialType(str, Enum):
+    """Credential types"""
+    PASSWORD = "password"
+    SSH_KEY = "ssh_key"
+    API_TOKEN = "api_token"
+    SNMP_COMMUNITY = "snmp_community"
+
+
+class CredentialBase(BaseModel):
+    """Base credential schema"""
+    name: str
+    username: str
+    credential_type: CredentialType
+    target_filter: dict = {}
+    metadata: dict = {}
+
+
+class CredentialCreate(CredentialBase):
+    """Credential creation request (includes password)"""
+    password: str  # Will be encrypted
+
+
+class CredentialResponse(CredentialBase):
+    """Credential response (excludes password)"""
+    id: str
+    organization_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class VectorData(BaseModel):
     """Vector data for a device"""
     device_role: List[float]

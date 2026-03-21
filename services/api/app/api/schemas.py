@@ -144,8 +144,8 @@ class Discovery(DiscoveryBase):
         from_attributes = True
 
 
-class DeviceMetadata(BaseModel):
-    """Device metadata from agent"""
+class DeviceMetadataUpload(BaseModel):
+    """Device metadata from agent upload"""
 
     device_id: str
     hostname: str
@@ -154,6 +154,30 @@ class DeviceMetadata(BaseModel):
     device_type: str
     role: str
     metadata: dict = {}
+
+
+class DeviceMetadata(BaseModel):
+    """Schema for Device.metadata JSONB field validation"""
+
+    interfaces: list[dict] = []
+    vlans: list[dict] = []
+    routing_table: list[dict] = []
+
+    acl_entries: list[dict] = []
+    firewall_rules: list[dict] = []
+
+    running_services: list[str] = []
+    installed_packages: list[dict] = []
+    users: list[dict] = []
+
+    discovery_method: str | None = None
+    discovery_timestamp: datetime | None = None
+    normalized_by: str | None = None
+
+    extra: dict = {}
+
+    class Config:
+        extra = "allow"
 
 
 class CredentialType(str, Enum):
@@ -247,7 +271,7 @@ class VectorDevice(BaseModel):
     """Device with vectors"""
 
     device_id: str
-    metadata: DeviceMetadata
+    metadata: DeviceMetadataUpload
     vectors: VectorData
 
 

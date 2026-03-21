@@ -86,6 +86,16 @@ class DeviceCreate(DeviceBase):
     pass
 
 
+class DeviceUpdate(BaseModel):
+    """Device update schema"""
+
+    hostname: str | None = None
+    management_ip: str | None = None
+    vendor: str | None = None
+    device_type: str | None = None
+    role: str | None = None
+
+
 class Device(DeviceBase):
     """Device response schema"""
 

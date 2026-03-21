@@ -63,20 +63,156 @@ async def list_devices(
 async def get_device(
     device_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get a specific device"""
-    # TODO: Implement database query
-    raise HTTPException(status_code=404, detail="Device not found")
+    from uuid import UUID
+
+    try:
+        device_uuid = UUID(device_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid device ID format")
+
+    result = await db.execute(
+        select(Device).where(
+            Device.id == device_uuid,
+            Device.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    return schemas.Device(
+        id=str(device.id),
+        hostname=device.hostname,
+        management_ip=str(device.ip_address),
+        vendor=device.vendor,
+        device_type=device.device_type,
+        role=device.device_role,
+        organization_id=str(device.organization_id),
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+    )
 
 
-@router.post("/devices", response_model=schemas.Device)
+@router.post("/devices", response_model=schemas.Device, status_code=201)
 async def create_device(
     device: schemas.DeviceCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new device"""
-    # TODO: Implement database insert
-    return {"id": "todo", **device.model_dump()}
+    from uuid import UUID, uuid4
+
+    device_obj = Device(
+        id=uuid4(),
+        organization_id=UUID(current_user.organization_id),
+        hostname=device.hostname,
+        ip_address=device.management_ip,
+        vendor=device.vendor,
+        device_type=device.device_type,
+        device_role=device.role,
+    )
+
+    db.add(device_obj)
+    await db.commit()
+    await db.refresh(device_obj)
+
+    return schemas.Device(
+        id=str(device_obj.id),
+        hostname=device_obj.hostname,
+        management_ip=str(device_obj.ip_address),
+        vendor=device_obj.vendor,
+        device_type=device_obj.device_type,
+        role=device_obj.device_role,
+        organization_id=str(device_obj.organization_id),
+        created_at=device_obj.created_at,
+        updated_at=device_obj.updated_at,
+    )
+
+
+@router.patch("/devices/{device_id}", response_model=schemas.Device)
+async def update_device(
+    device_id: str,
+    device_update: schemas.DeviceUpdate,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a device"""
+    from uuid import UUID
+
+    try:
+        device_uuid = UUID(device_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid device ID format")
+
+    result = await db.execute(
+        select(Device).where(
+            Device.id == device_uuid,
+            Device.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    update_data = device_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "management_ip":
+            setattr(device, "ip_address", value)
+        elif field == "role":
+            setattr(device, "device_role", value)
+        else:
+            setattr(device, field, value)
+
+    await db.commit()
+    await db.refresh(device)
+
+    return schemas.Device(
+        id=str(device.id),
+        hostname=device.hostname,
+        management_ip=str(device.ip_address),
+        vendor=device.vendor,
+        device_type=device.device_type,
+        role=device.device_role,
+        organization_id=str(device.organization_id),
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+    )
+
+
+@router.delete("/devices/{device_id}", status_code=204)
+async def delete_device(
+    device_id: str,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a device"""
+    from uuid import UUID
+
+    try:
+        device_uuid = UUID(device_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid device ID format")
+
+    result = await db.execute(
+        select(Device).where(
+            Device.id == device_uuid,
+            Device.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    device = result.scalar_one_or_none()
+
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    await db.delete(device)
+    await db.commit()
+
+    return None
 
 
 # =============================================================================

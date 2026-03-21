@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: ../..
+      dockerfile: docker/agent/Dockerfile
+    container_name: netdiscover-agent
+    environment:
+      - AGENT_API_KEY=${AGENT_API_KEY}
+      - AGENT_NAME=${AGENT_NAME:-Local Agent}
+      - CLOUD_API_URL=${CLOUD_API_URL:-http://api:8000}
+      - DB_PATH=/app/data/agent.db
+      - LOG_LEVEL=INFO
+    volumes:
+      - agent_data:/app/data
+      - ../../configs/agent.yaml:/app/config/agent.yaml:ro
+    restart: unless-stopped
+    networks:
+      - agent-network
+
+volumes:
+  agent_data:
+
+networks:
+  agent-network:
+    driver: bridge

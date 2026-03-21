@@ -10,6 +10,9 @@ import os
 import sys
 from datetime import datetime
 
+from fastapi import FastAPI
+import uvicorn
+
 from agent.collector import DeviceCollector
 from agent.normalizer import ConfigNormalizer
 from agent.sanitizer import ConfigSanitizer
@@ -23,6 +26,21 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def create_app() -> FastAPI:
+    """Create FastAPI app for agent"""
+    app = FastAPI(title="NetDiscoverIT Local Agent")
+    
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    
+    @app.get("/ready")
+    async def ready():
+        return {"status": "ready"}
+    
+    return app
 
 
 class Agent:

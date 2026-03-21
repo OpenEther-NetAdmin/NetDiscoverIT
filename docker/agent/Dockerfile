@@ -1,47 +1,38 @@
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     curl \
     snmp \
     libsnmp-dev \
-    # Network discovery tools
     nmap \
     masscan \
-    # ARP scanning
     arp-scan \
-    # Flow collection (fprobe, nfdump)
     fprobe \
     nfdump \
-    # IVRE dependencies
     p0f \
     zeek \
-    # MongoDB (IVRE default backend)
     mongodb \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
-COPY services/agent/requirements.txt /app/requirements.txt
-
-# Install Python dependencies
+COPY docker/agent/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy application code
-COPY services/agent /app
-
-# Create config directory
-RUN mkdir -p /app/config /app/data
-
-# Copy default config
+COPY services/agent /app/agent
 COPY configs/agent.yaml /app/config/agent.yaml
 
-# Expose port
+RUN mkdir -p /app/data
+
+ENV PYTHONPATH=/app
+ENV AGENT_CONFIG_PATH=/app/config/agent.yaml
+
 EXPOSE 8080
 
-# Run the agent
-CMD ["python", "-m", "agent.main"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["python", "-m", "agent.main"]
+CMD ["--mode", "continuous"]

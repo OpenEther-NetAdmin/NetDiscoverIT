@@ -61,3 +61,19 @@ devices:
 # Ollama Configuration (for local LLM)
 OLLAMA_BASE_URL: "http://ollama:11434"
 OLLAMA_MODEL: "llama3.2:7b"
+
+# Database Configuration
+db_path: "/app/data/agent.db"
+db_retention_days: 90
+
+# Cloud Configuration
+cloud:
+  api_url: "http://api:8000"
+  upload_batch_size: 100
+  upload_interval_seconds: 300
+
+# Sanitizer Configuration
+sanitizer:
+  enable_tier1: true
+  enable_tier2: true
+  enable_tier3: true

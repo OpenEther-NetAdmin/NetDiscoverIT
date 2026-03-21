@@ -156,7 +156,7 @@ class Device(Base):
     #         "ISO27001", "SOC2", "NIST-CSF" — multiple allowed.
     # Set by customer during onboarding or device classification; updated by ML role classifier.
     compliance_scope = Column(JSONB, default=list)  # e.g. ["PCI-CDE", "HIPAA-PHI"]
-    metadata = Column(JSONB, default=dict)
+    meta = Column(JSONB, default=dict)
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
@@ -216,7 +216,7 @@ class Interface(Base):
     duplex = Column(String(20))  # full, half, auto
     mtu = Column(Integer)
     vlan_id = Column(Integer)
-    metadata = Column(JSONB, default=dict)
+    meta = Column(JSONB, default=dict)
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -346,7 +346,7 @@ class Credential(Base):
     encrypted_password = Column(EncryptedText, nullable=False)  # Transparently encrypted/decrypted
     credential_type = Column(String(50), nullable=False)  # password, ssh_key, api_token, snmp_community
     target_filter = Column(JSONB, default=dict)
-    metadata = Column(JSONB, default=dict)
+    meta = Column(JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -379,7 +379,7 @@ class Site(Base):
     site_type = Column(String(50), default="on_premises")
     location_address = Column(String(500))      # physical address (optional, human reference only)
     timezone = Column(String(100), default="UTC")
-    metadata = Column(JSONB, default=dict)
+    meta = Column(JSONB, default=dict)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

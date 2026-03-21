@@ -10,6 +10,7 @@ import logging
 
 from app.core.config import settings
 from app.api import routes
+from app.api.auth import router as auth_router
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),
@@ -74,6 +75,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(routes.router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.get("/")

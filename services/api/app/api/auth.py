@@ -1,0 +1,175 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
+from datetime import timedelta
+from uuid import uuid4
+
+from app.core.security import (
+    hash_password, verify_password, create_access_token, 
+    create_refresh_token, decode_token
+)
+from app.core.config import settings
+from app.db.database import get_db
+from app.models.models import User
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+    role: str = "viewer"
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    credentials: UserLogin,
+    db: AsyncSession = Depends(get_db)
+):
+    """Login with email and password, returns access + refresh tokens"""
+    result = await db.execute(select(User).where(User.email == credentials.email))
+    user = result.scalar_one_or_none()
+    
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+    
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "org_id": str(user.organization_id),
+            "role": user.role
+        }
+    )
+    refresh_token = create_refresh_token(
+        data={"sub": str(user.id)}
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(
+    request: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Refresh access token using refresh token"""
+    try:
+        payload = decode_token(request.refresh_token)
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+    
+    result = await db.execute(select(User).where(User.id == uuid4(user_id)))
+    user = result.scalar_one_or_none()
+    
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive"
+        )
+    
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "org_id": str(user.organization_id),
+            "role": user.role
+        }
+    )
+    new_refresh_token = create_refresh_token(
+        data={"sub": str(user.id)}
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=new_refresh_token
+    )
+
+
+@router.post("/logout")
+async def logout():
+    """Logout endpoint - client should discard tokens"""
+    return {"message": "Successfully logged out"}
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Register a new user"""
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    existing_user = result.scalar_one_or_none()
+    
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    new_user = User(
+        id=uuid4(),
+        organization_id=uuid4(),
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        full_name=user_data.full_name,
+        role=user_data.role,
+        is_active=True
+    )
+    
+    db.add(new_user)
+    await db.commit()
+    
+    access_token = create_access_token(
+        data={
+            "sub": str(new_user.id),
+            "org_id": str(new_user.organization_id),
+            "role": new_user.role
+        }
+    )
+    refresh_token = create_refresh_token(
+        data={"sub": str(new_user.id)}
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token
+    )

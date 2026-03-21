@@ -4,12 +4,11 @@ PostgreSQL Database Connection
 
 import logging
 from typing import AsyncGenerator
-from sqlalchemy import text
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-from app.models.models import Base
 
 logger = logging.getLogger(__name__)
 

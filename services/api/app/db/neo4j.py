@@ -4,7 +4,7 @@ Based on net-discit database-schemas.md
 """
 
 import logging
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)

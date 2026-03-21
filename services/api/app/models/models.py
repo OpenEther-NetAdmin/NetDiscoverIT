@@ -3,9 +3,8 @@ Database Models - PostgreSQL
 Based on net-discit database-schemas.md
 """
 
-print("models.py: starting")
-from datetime import datetime
 from uuid import uuid4
+
 from sqlalchemy import (
     Column,
     String,
@@ -21,9 +20,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, MACADDR
-from sqlalchemy.orm import relationship, backref, DeclarativeBase
+from sqlalchemy.orm import relationship, DeclarativeBase
 from pgvector.sqlalchemy import Vector
 
+print("models.py: starting")
 print("models.py: imports ok")
 
 

@@ -267,10 +267,13 @@ async def list_agents(
 ):
     """List all agents for user's organization"""
     from uuid import UUID
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
-        select(LocalAgent).where(LocalAgent.organization_id == org_id).offset(skip).limit(limit)
+        select(LocalAgent)
+        .where(LocalAgent.organization_id == org_id)
+        .offset(skip)
+        .limit(limit)
     )
     agents = result.scalars().all()
 
@@ -300,23 +303,23 @@ async def get_agent(
     """Get a specific agent"""
     from uuid import UUID
     from sqlalchemy import select
-    
+
     try:
         agent_uuid = UUID(agent_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
-    
+
     result = await db.execute(
         select(LocalAgent).where(
             LocalAgent.id == agent_uuid,
-            LocalAgent.organization_id == UUID(current_user.organization_id)
+            LocalAgent.organization_id == UUID(current_user.organization_id),
         )
     )
     agent = result.scalar_one_or_none()
-    
+
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     return schemas.AgentResponse(
         id=str(agent.id),
         organization_id=str(agent.organization_id),
@@ -331,7 +334,9 @@ async def get_agent(
     )
 
 
-@router.post("/agents/{agent_id}/rotate-key", response_model=schemas.AgentRotateKeyResponse)
+@router.post(
+    "/agents/{agent_id}/rotate-key", response_model=schemas.AgentRotateKeyResponse
+)
 async def rotate_agent_key(
     agent_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -342,32 +347,32 @@ async def rotate_agent_key(
     from uuid import UUID
     from sqlalchemy import select
     from app.core.security import hash_password
-    
+
     try:
         agent_uuid = UUID(agent_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
-    
+
     result = await db.execute(
         select(LocalAgent).where(
             LocalAgent.id == agent_uuid,
-            LocalAgent.organization_id == UUID(current_user.organization_id)
+            LocalAgent.organization_id == UUID(current_user.organization_id),
         )
     )
     agent = result.scalar_one_or_none()
-    
+
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     new_api_key = f"ndi_agent_{secrets.token_urlsafe(32)}"
     agent.api_key_hash = hash_password(new_api_key)
-    
+
     await db.commit()
-    
+
     return schemas.AgentRotateKeyResponse(
         agent_id=str(agent.id),
         new_api_key=new_api_key,
-        message="Save this API key - it won't be shown again"
+        message="Save this API key - it won't be shown again",
     )
 
 
@@ -381,32 +386,28 @@ async def agent_heartbeat(
     from uuid import UUID
     from sqlalchemy import select
     from datetime import datetime, timezone
-    
+
     try:
         agent_uuid = UUID(agent_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
-    
-    result = await db.execute(
-        select(LocalAgent).where(LocalAgent.id == agent_uuid)
-    )
+
+    result = await db.execute(select(LocalAgent).where(LocalAgent.id == agent_uuid))
     agent = result.scalar_one_or_none()
-    
+
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     agent.last_seen = datetime.now(timezone.utc)
     if heartbeat.agent_version:
         agent.agent_version = heartbeat.agent_version
     if heartbeat.capabilities:
         agent.capabilities = heartbeat.capabilities
-    
+
     await db.commit()
-    
+
     return schemas.HeartbeatResponse(
-        status="ok",
-        agent_id=str(agent.id),
-        last_seen=agent.last_seen
+        status="ok", agent_id=str(agent.id), last_seen=agent.last_seen
     )
 
 

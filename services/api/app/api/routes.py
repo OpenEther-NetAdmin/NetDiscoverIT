@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
-from app.models.models import Device, Site
+from app.models.models import Device, Site, LocalAgent
 
 router = APIRouter()
 
@@ -253,6 +253,161 @@ async def receive_vectors(
         "count": len(vectors.devices),
         "agent_org": agent_context["organization_id"],
     }
+
+
+# =============================================================================
+# AGENTS
+# =============================================================================
+@router.get("/agents", response_model=List[schemas.AgentResponse])
+async def list_agents(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all agents for user's organization"""
+    from uuid import UUID
+    
+    org_id = UUID(current_user.organization_id)
+    result = await db.execute(
+        select(LocalAgent).where(LocalAgent.organization_id == org_id).offset(skip).limit(limit)
+    )
+    agents = result.scalars().all()
+
+    return [
+        schemas.AgentResponse(
+            id=str(a.id),
+            organization_id=str(a.organization_id),
+            site_id=str(a.site_id) if a.site_id else None,
+            name=a.name,
+            agent_version=a.agent_version,
+            last_seen=a.last_seen,
+            is_active=a.is_active,
+            capabilities=a.capabilities or {},
+            created_at=a.created_at,
+            updated_at=a.updated_at,
+        )
+        for a in agents
+    ]
+
+
+@router.get("/agents/{agent_id}", response_model=schemas.AgentResponse)
+async def get_agent(
+    agent_id: str,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific agent"""
+    from uuid import UUID
+    from sqlalchemy import select
+    
+    try:
+        agent_uuid = UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    
+    result = await db.execute(
+        select(LocalAgent).where(
+            LocalAgent.id == agent_uuid,
+            LocalAgent.organization_id == UUID(current_user.organization_id)
+        )
+    )
+    agent = result.scalar_one_or_none()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    return schemas.AgentResponse(
+        id=str(agent.id),
+        organization_id=str(agent.organization_id),
+        site_id=str(agent.site_id) if agent.site_id else None,
+        name=agent.name,
+        agent_version=agent.agent_version,
+        last_seen=agent.last_seen,
+        is_active=agent.is_active,
+        capabilities=agent.capabilities or {},
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
+
+
+@router.post("/agents/{agent_id}/rotate-key", response_model=schemas.AgentRotateKeyResponse)
+async def rotate_agent_key(
+    agent_id: str,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rotate agent API key"""
+    import secrets
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.core.security import hash_password
+    
+    try:
+        agent_uuid = UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    
+    result = await db.execute(
+        select(LocalAgent).where(
+            LocalAgent.id == agent_uuid,
+            LocalAgent.organization_id == UUID(current_user.organization_id)
+        )
+    )
+    agent = result.scalar_one_or_none()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    new_api_key = f"ndi_agent_{secrets.token_urlsafe(32)}"
+    agent.api_key_hash = hash_password(new_api_key)
+    
+    await db.commit()
+    
+    return schemas.AgentRotateKeyResponse(
+        agent_id=str(agent.id),
+        new_api_key=new_api_key,
+        message="Save this API key - it won't be shown again"
+    )
+
+
+@router.post("/agents/{agent_id}/heartbeat", response_model=schemas.HeartbeatResponse)
+async def agent_heartbeat(
+    agent_id: str,
+    heartbeat: schemas.HeartbeatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Agent heartbeat - updates last_seen, agent_version, capabilities"""
+    from uuid import UUID
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+    
+    try:
+        agent_uuid = UUID(agent_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid agent ID format")
+    
+    result = await db.execute(
+        select(LocalAgent).where(LocalAgent.id == agent_uuid)
+    )
+    agent = result.scalar_one_or_none()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    agent.last_seen = datetime.now(timezone.utc)
+    if heartbeat.agent_version:
+        agent.agent_version = heartbeat.agent_version
+    if heartbeat.capabilities:
+        agent.capabilities = heartbeat.capabilities
+    
+    await db.commit()
+    
+    return schemas.HeartbeatResponse(
+        status="ok",
+        agent_id=str(agent.id),
+        last_seen=agent.last_seen
+    )
 
 
 # =============================================================================

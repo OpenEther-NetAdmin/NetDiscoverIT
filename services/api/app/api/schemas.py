@@ -328,3 +328,45 @@ class SiteResponse(SiteBase):
 
     class Config:
         from_attributes = True
+
+
+class AgentBase(BaseModel):
+    """Base agent schema"""
+    name: str
+
+
+class AgentResponse(BaseModel):
+    """Agent response schema"""
+    id: str
+    organization_id: str
+    site_id: str | None = None
+    name: str
+    agent_version: str | None = None
+    last_seen: datetime | None = None
+    is_active: bool
+    capabilities: dict = {}
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AgentRotateKeyResponse(BaseModel):
+    """Response when rotating agent key"""
+    agent_id: str
+    new_api_key: str
+    message: str
+
+
+class HeartbeatRequest(BaseModel):
+    """Agent heartbeat request"""
+    agent_version: str | None = None
+    capabilities: dict = {}
+
+
+class HeartbeatResponse(BaseModel):
+    """Agent heartbeat response"""
+    status: str
+    agent_id: str
+    last_seen: datetime

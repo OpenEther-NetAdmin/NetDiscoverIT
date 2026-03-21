@@ -2,11 +2,16 @@
 API Routes
 """
 
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api import dependencies
+from app.api.dependencies import get_db, get_current_user, get_agent_auth
+from app.models.models import Device
 
 router = APIRouter()
 
@@ -28,11 +33,33 @@ async def list_devices(
     skip: int = 0,
     limit: int = 100,
     organization_id: Optional[str] = None,
-    current_user: schemas.User = Depends(dependencies.get_current_user),
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """List all devices"""
-    # TODO: Implement database query
-    return []
+    """List all devices for user's organization"""
+    org_id = UUID(current_user.organization_id)
+    result = await db.execute(
+        select(Device)
+        .where(Device.organization_id == org_id)
+        .offset(skip)
+        .limit(limit)
+    )
+    devices = result.scalars().all()
+    
+    return [
+        schemas.Device(
+            id=str(d.id),
+            hostname=d.hostname,
+            management_ip=str(d.ip_address),
+            vendor=d.vendor,
+            device_type=d.device_type,
+            role=d.device_role,
+            organization_id=str(d.organization_id),
+            created_at=d.created_at,
+            updated_at=d.updated_at
+        )
+        for d in devices
+    ]
 
 
 @router.get("/devices/{device_id}", response_model=schemas.Device)
@@ -88,11 +115,15 @@ async def get_discovery(
 @router.post("/agent/vectors")
 async def receive_vectors(
     vectors: schemas.VectorBatch,
-    x_internal_api_key: str = Depends(dependencies.get_internal_api_key),
+    agent_context: dict = Depends(get_agent_auth),
+    db: AsyncSession = Depends(get_db),
 ):
     """Receive vector batch from agent"""
-    # TODO: Implement vector storage
-    return {"status": "received", "count": len(vectors.devices)}
+    return {
+        "status": "received",
+        "count": len(vectors.devices),
+        "agent_org": agent_context["organization_id"]
+    }
 
 
 # =============================================================================

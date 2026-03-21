@@ -288,3 +288,43 @@ class PathResult(BaseModel):
     summary: dict = {}
     analysis: dict = {}
     issues: List[dict] = []
+
+
+class SiteBase(BaseModel):
+    """Base site schema"""
+
+    name: str
+    description: str | None = None
+    site_type: str = "on_premises"
+    location_address: str | None = None
+    timezone: str = "UTC"
+
+
+class SiteCreate(SiteBase):
+    """Site creation schema"""
+
+    pass
+
+
+class SiteUpdate(BaseModel):
+    """Site update schema"""
+
+    name: str | None = None
+    description: str | None = None
+    site_type: str | None = None
+    location_address: str | None = None
+    timezone: str | None = None
+    is_active: bool | None = None
+
+
+class SiteResponse(SiteBase):
+    """Site response schema"""
+
+    id: str
+    organization_id: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

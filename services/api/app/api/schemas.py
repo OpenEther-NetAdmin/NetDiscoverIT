@@ -2,18 +2,56 @@
 API Schemas
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
 
-class User(BaseModel):
-    """User schema"""
+class UserLogin(BaseModel):
+    """User login request"""
+    email: EmailStr
+    password: str
+
+
+class UserCreate(BaseModel):
+    """User creation request"""
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+    role: str = "viewer"
+
+
+class UserUpdate(BaseModel):
+    """User update request"""
+    email: EmailStr | None = None
+    full_name: str | None = None
+    role: str | None = None
+    password: str | None = None
+    is_active: bool | None = None
+
+
+class UserResponse(BaseModel):
+    """User response (excludes sensitive fields)"""
     id: str
     email: str
     organization_id: str
+    full_name: str | None = None
     role: str
+    is_active: bool
+    last_login: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    """JWT token response"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
 class DeviceBase(BaseModel):

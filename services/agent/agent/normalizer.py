@@ -1,43 +1,66 @@
 """
 Config Normalizer
-Converts vendor-specific configs to JSON using LLM
+Converts vendor-specific configs to JSON using TextFSM or LLM
 """
 
 import json
 import logging
 from typing import Dict
 
+from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
+
 logger = logging.getLogger(__name__)
 
 
 class ConfigNormalizer:
     """Normalizes vendor configs to JSON"""
-    
+
     def __init__(self, config):
         self.config = config
+        self.textfsm_parser = TextFSMParser()
     
     async def normalize(self, raw_config: str) -> Dict:
-        """Convert raw config to JSON using LLM"""
-        # Try local LLM first (Ollama)
+        """Convert raw config to JSON using TextFSM or LLM"""
+
+        vendor = self._detect_vendor(raw_config)
+        vendor_key = self._get_vendor_key(vendor)
+
+        if vendor_key:
+            try:
+                textfsm_result = self.textfsm_parser.parse(raw_config, vendor_key)
+                if textfsm_result and textfsm_result.get("_normalization_method") == "textfsm":
+                    logger.info(f"Successfully normalized using TextFSM for vendor: {vendor}")
+                    return textfsm_result
+            except Exception as e:
+                logger.warning(f"TextFSM normalization failed for {vendor}: {e}")
+
         try:
             return await self._normalize_ollama(raw_config)
         except Exception as e:
             logger.warning(f"Ollama normalization failed: {e}")
-        
-        # Try cloud LLM (Google Gemini)
+
         try:
             return await self._normalize_gemini(raw_config)
         except Exception as e:
             logger.warning(f"Gemini normalization failed: {e}")
-        
-        # Try Anthropic Claude
+
         try:
             return await self._normalize_anthropic(raw_config)
         except Exception as e:
             logger.warning(f"Anthropic normalization failed: {e}")
-        
-        # Fallback to rule-based parsing
+
         return self._normalize_rulebased(raw_config)
+
+    def _get_vendor_key(self, vendor: str) -> str:
+        """Map detected vendor to TextFSM template key"""
+        vendor_map = {
+            "cisco": "cisco_ios",
+            "juniper": "juniper_junos",
+            "arista": "arista_eos",
+            "f5": "f5_bigip",
+            "hp": "hp_procurve",
+        }
+        return vendor_map.get(vendor.lower(), "")
     
     async def _normalize_ollama(self, raw_config: str) -> Dict:
         """Use Ollama for normalization"""

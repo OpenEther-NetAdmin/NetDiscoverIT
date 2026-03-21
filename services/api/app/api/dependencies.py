@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import User
 from app.core.config import settings
 from app.core.security import decode_token
-from app.models.models import User as UserModel
+from app.models.models import LocalAgent, User as UserModel
 
 from app.db.database import get_db
 
@@ -83,3 +83,43 @@ async def get_internal_api_key(
             detail="Invalid internal API key"
         )
     return x_internal_api_key
+
+
+async def get_agent_auth(
+    x_agent_key: str = Header(..., alias="X-Agent-Key"),
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """
+    Validate agent API key from X-Agent-Key header.
+    Returns agent context with org_id and agent_id.
+    """
+    if not x_agent_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Agent-Key header"
+        )
+    
+    from app.core.security import verify_password
+    
+    result = await db.execute(
+        select(LocalAgent).where(LocalAgent.is_active == True)
+    )
+    agents = result.scalars().all()
+    
+    agent_context = None
+    for agent in agents:
+        if verify_password(x_agent_key, agent.api_key_hash):
+            agent_context = {
+                "agent_id": str(agent.id),
+                "organization_id": str(agent.organization_id),
+                "agent_name": agent.name
+            }
+            break
+    
+    if not agent_context:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent API key"
+        )
+    
+    return agent_context

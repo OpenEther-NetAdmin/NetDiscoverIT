@@ -1,0 +1,7 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Local virtual environments
+services/api/.venv/

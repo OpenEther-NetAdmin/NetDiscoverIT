@@ -1,0 +1,25 @@
+sanitizer:
+  prefer_textfsm: true
+  fallback_to_regex: true
+
+  enable_llm: false
+  ollama_url: "http://localhost:11434"
+  ollama_model: "llama3.2:7b"
+
+  safety_check_enabled: true
+  block_on_failure: true
+
+  max_config_size_mb: 50
+  timeout_seconds: 30
+
+  tokens:
+    ipv4: "<ip_address>"
+    ipv6: "<ipv6_address>"
+    hostname: "<hostname>"
+    fqdn: "<fqdn>"
+    password: "<password>"
+    secret: "<secret>"
+    community: "<community_string>"
+    bgp_as: "<as_number>"
+    vlan_id: "<vlan_id>"
+    mac: "<mac_address>"

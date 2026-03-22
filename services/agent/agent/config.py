@@ -3,7 +3,7 @@ Agent Configuration
 """
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 import yaml
 
 
@@ -19,6 +19,20 @@ class SNMPConfig(BaseModel):
     timeout: int = 5
     community: str = "public"
     version: str = "v2c"
+
+
+class SanitizerConfig(BaseModel):
+    """Sanitizer-specific configuration"""
+    prefer_textfsm: bool = True
+    fallback_to_regex: bool = True
+    enable_llm: bool = False
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2:7b"
+    safety_check_enabled: bool = True
+    block_on_failure: bool = True
+    max_config_size_mb: int = 50
+    timeout_seconds: int = 30
+    custom_tokens: Optional[Dict[str, str]] = None
 
 
 class AgentConfig(BaseModel):
@@ -49,6 +63,9 @@ class AgentConfig(BaseModel):
 
     # Target devices (loaded from config file)
     devices: List[dict] = []
+    
+    # Sanitizer
+    sanitizer: SanitizerConfig = SanitizerConfig()
     
     @classmethod
     def from_file(cls, path: str) -> "AgentConfig":

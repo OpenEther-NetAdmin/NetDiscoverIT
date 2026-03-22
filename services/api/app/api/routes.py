@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
-from app.models.models import Device, Site, LocalAgent
+from app.models.models import Device, Site, LocalAgent, Discovery
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -270,20 +271,115 @@ async def delete_device(
 async def trigger_discovery(
     discovery: schemas.DiscoveryCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Trigger a new discovery"""
-    # TODO: Implement discovery logic
-    return {"id": "todo", "status": "pending", **discovery.model_dump()}
+    from uuid import UUID, uuid4
+    from datetime import datetime, timezone
+    import json
+    import redis
+
+    org_id = UUID(current_user.organization_id)
+    discovery_id = uuid4()
+
+    discovery_obj = Discovery(
+        id=discovery_id,
+        organization_id=org_id,
+        created_by=UUID(current_user.id),
+        name=discovery.name,
+        discovery_type=discovery.discovery_type,
+        targets={},
+        status="pending",
+        progress=0,
+    )
+
+    db.add(discovery_obj)
+    await db.commit()
+    await db.refresh(discovery_obj)
+
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL)
+        job_data = {
+            "discovery_id": str(discovery_id),
+            "organization_id": str(org_id),
+            "name": discovery.name,
+            "discovery_type": discovery.discovery_type,
+            "scan_profile": "standard",
+        }
+        redis_client.lpush("discovery:jobs", json.dumps(job_data))
+        redis_client.close()
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to queue discovery job: {e}")
+
+    await dependencies.audit_log(
+        action="discovery.create",
+        resource_type="discovery",
+        resource_id=str(discovery_id),
+        resource_name=discovery.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
+    return schemas.Discovery(
+        id=str(discovery_obj.id),
+        organization_id=str(discovery_obj.organization_id),
+        name=discovery_obj.name,
+        discovery_type=discovery_obj.discovery_type or "full",
+        status="pending",
+        device_count=0,
+        created_at=discovery_obj.created_at,
+        completed_at=None,
+    )
 
 
 @router.get("/discoveries/{discovery_id}", response_model=schemas.Discovery)
 async def get_discovery(
     discovery_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get discovery status"""
-    # TODO: Implement status check
-    raise HTTPException(status_code=404, detail="Discovery not found")
+    from uuid import UUID
+    from sqlalchemy import select
+
+    try:
+        discovery_uuid = UUID(discovery_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid discovery ID format")
+
+    result = await db.execute(
+        select(Discovery).where(
+            Discovery.id == discovery_uuid,
+            Discovery.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    discovery = result.scalar_one_or_none()
+
+    if not discovery:
+        raise HTTPException(status_code=404, detail="Discovery not found")
+
+    await dependencies.audit_log(
+        action="discovery.view",
+        resource_type="discovery",
+        resource_id=discovery_id,
+        resource_name=discovery.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
+    return schemas.Discovery(
+        id=str(discovery.id),
+        organization_id=str(discovery.organization_id),
+        name=discovery.name,
+        discovery_type=discovery.discovery_type or "full",
+        status=discovery.status,
+        device_count=discovery.results.get("device_count", 0) if discovery.results else 0,
+        created_at=discovery.created_at,
+        completed_at=discovery.completed_at,
+    )
 
 
 # =============================================================================
@@ -591,16 +687,101 @@ async def upload_agent_data(
 # =============================================================================
 # PATH VISUALIZER
 # =============================================================================
-# PATH VISUALIZER
-# =============================================================================
 @router.post("/path/trace", response_model=schemas.PathResult)
 async def trace_path(
     path_request: schemas.PathTraceRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Trace path between two IPs"""
-    # TODO: Implement path tracing
-    raise HTTPException(status_code=501, detail="Not implemented")
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.db.neo4j import get_neo4j_client
+
+    org_id = UUID(current_user.organization_id)
+
+    result = await db.execute(
+        select(Device).where(
+            Device.organization_id == org_id,
+            Device.ip_address == path_request.source_ip,
+        )
+    )
+    source_device = result.scalar_one_or_none()
+
+    result = await db.execute(
+        select(Device).where(
+            Device.organization_id == org_id,
+            Device.ip_address == path_request.destination_ip,
+        )
+    )
+    dest_device = result.scalar_one_or_none()
+
+    if not source_device or not dest_device:
+        return schemas.PathResult(
+            path_found=False,
+            hops=[],
+            summary={"error": "Source or destination device not found"},
+            analysis={},
+            issues=[{"type": "device_not_found", "message": "One or both devices not found in database"}],
+        )
+
+    try:
+        neo4j_client = await get_neo4j_client()
+        path_nodes = await neo4j_client.find_path(
+            source_device.hostname, dest_device.hostname
+        )
+
+        if not path_nodes:
+            return schemas.PathResult(
+                path_found=False,
+                hops=[],
+                summary={"message": "No path found between devices"},
+                analysis={},
+                issues=[{"type": "no_path", "message": "No connectivity path found in topology"}],
+            )
+
+        hops = []
+        for i, node in enumerate(path_nodes):
+            hops.append(
+                schemas.PathHop(
+                    hop=i + 1,
+                    device={"hostname": node.get("hostname"), "ip_address": node.get("ip_address")},
+                    interface={"name": "unknown"},
+                    egress={"name": "unknown"},
+                )
+            )
+
+        await dependencies.audit_log(
+            action="path.trace",
+            resource_type="path",
+            resource_name=f"{path_request.source_ip} -> {path_request.destination_ip}",
+            outcome="success",
+            current_user=current_user,
+            db=db,
+        )
+
+        return schemas.PathResult(
+            path_found=True,
+            hops=hops,
+            summary={
+                "total_hops": len(hops),
+                "source": path_request.source_ip,
+                "destination": path_request.destination_ip,
+            },
+            analysis={"path_length": len(hops)},
+            issues=[],
+        )
+
+    except Exception as e:
+        import logging
+        logging.error(f"Path trace error: {e}")
+        return schemas.PathResult(
+            path_found=False,
+            hops=[],
+            summary={"error": str(e)},
+            analysis={},
+            issues=[{"type": "trace_error", "message": "Failed to trace path"}],
+        )
 
 
 # =============================================================================

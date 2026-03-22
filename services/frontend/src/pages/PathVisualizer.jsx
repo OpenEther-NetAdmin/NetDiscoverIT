@@ -1,14 +1,17 @@
 import React, { useState, useCallback } from 'react';
-import { Box, Heading, Flex, Input, Button, Card, CardBody, CardHeader, VStack, HStack, Badge, Text, Table, Thead, Tbody, Tr, Th, Td, Icon } from '@chakra-ui/react';
-import ReactFlow, { Background, Controls, MiniMap, useNodesState, useEdgesState } from 'reactflow';
+import { Box, Heading, Flex, Input, Button, Card, CardBody, CardHeader, VStack, HStack, Badge, Text, Table, Thead, Tbody, Tr, Th, Td, Icon, useToast } from '@chakra-ui/react';
+import ReactFlow, { Background, Controls, MiniMap, useNodesState, useEdgesState, addEdge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { FiNavigation, FiCheck, FiAlertTriangle, FiInfo } from 'react-icons/fi';
+import api from '../services/api';
 
 const PathVisualizer = () => {
   const [sourceIP, setSourceIP] = useState('');
   const [destIP, setDestIP] = useState('');
   const [path, setPath] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const toast = useToast();
   
   const [nodes, setNodes, onNodesChange] = useNodesState([
     { id: '1', position: { x: 100, y: 100 }, data: { label: 'SW-ACCESS-1' }, type: 'default', style: { background: '#E2E8F0', padding: 10, borderRadius: 5 } },
@@ -25,35 +28,66 @@ const PathVisualizer = () => {
     { id: 'e4-5', source: '4', target: '5', label: 'VLAN 30', animated: true },
   ]);
 
-  const tracePath = () => {
+  const tracePath = async () => {
     if (!sourceIP || !destIP) return;
     
     setLoading(true);
+    setError(null);
     
-    // Simulate API call
-    setTimeout(() => {
-      setPath({
-        found: true,
-        hops: [
-          { hop: 1, device: 'SW-ACCESS-1', interface: 'Gi1/0/10', vlan: 10, zone: 'TRUST', type: 'switch' },
-          { hop: 2, device: 'RTR-CORE-1', interface: 'Gi0/1', vlan: '10→20', zone: 'TRUST', type: 'router', nat: true },
-          { hop: 3, device: 'FW-EDGE-1', interface: 'inside→outside', vlan: '20→99', zone: 'DMZ', type: 'firewall', acl: 'permit' },
-          { hop: 4, device: 'SW-DB-1', interface: 'Gi1/0/1', vlan: '99→30', zone: 'TRUST', type: 'switch' },
-        ],
-        summary: {
-          totalHops: 4,
-          vlanChanges: 3,
-          zoneChanges: 2,
-          estimatedLatency: '8ms',
-          natApplied: true
-        },
-        issues: [
-          { severity: 'warning', type: 'utilization', message: 'RTR-CORE-1 Gi0/2 at 78% utilization' },
-          { severity: 'info', type: 'zone_crossing', message: 'Traffic crosses 2 zones (TRUST → DMZ)' }
-        ]
+    try {
+      const result = await api.tracePath(sourceIP, destIP);
+      
+      if (result.path_found) {
+        setPath({
+          found: true,
+          hops: result.hops.map((hop, index) => ({
+            hop: hop.hop,
+            device: hop.device?.hostname || 'Unknown',
+            interface: hop.interface?.name || 'Unknown',
+            vlan: hop.interface?.vlan_id || 'N/A',
+            type: 'device',
+          })),
+          summary: {
+            totalHops: result.summary?.path_length || result.hops.length,
+            vlanChanges: 0,
+            zoneChanges: 0,
+            estimatedLatency: 'N/A',
+            natApplied: false
+          },
+          issues: result.issues || []
+        });
+        
+        toast({
+          title: 'Path traced successfully',
+          status: 'success',
+          duration: 3000,
+        });
+      } else {
+        setPath({
+          found: false,
+          hops: [],
+          summary: result.summary || {},
+          issues: result.issues || [{ severity: 'warning', message: result.summary?.error || 'No path found' }]
+        });
+        
+        toast({
+          title: 'No path found',
+          description: result.summary?.error || 'Could not find a path between the specified devices',
+          status: 'warning',
+          duration: 5000,
+        });
+      }
+    } catch (err) {
+      setError(err.message);
+      toast({
+        title: 'Path trace failed',
+        description: err.message,
+        status: 'error',
+        duration: 5000,
       });
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const getIssueIcon = (severity) => {
@@ -170,7 +204,7 @@ const PathVisualizer = () => {
               </Box>
               
               {/* Issues */}
-              {path.issues.length > 0 && (
+              {path.issues && path.issues.length > 0 && (
                 <Box>
                   <Text fontWeight="semibold" mb={2}>Analysis</Text>
                   <VStack align="stretch" spacing={2}>
@@ -178,13 +212,13 @@ const PathVisualizer = () => {
                       <Flex 
                         key={i} 
                         p={2} 
-                        bg={`${getIssueColor(issue.severity)}.50`} 
+                        bg={`${getIssueColor(issue.severity || 'info')}.50`} 
                         borderRadius="md"
                         align="center"
                         gap={2}
                       >
-                        <Icon as={getIssueIcon(issue.severity)} color={`${getIssueColor(issue.severity)}.500`} />
-                        <Text fontSize="sm">{issue.message}</Text>
+                        <Icon as={getIssueIcon(issue.severity || 'info')} color={`${getIssueColor(issue.severity || 'info')}.500`} />
+                        <Text fontSize="sm">{issue.message || issue.type}</Text>
                       </Flex>
                     ))}
                   </VStack>

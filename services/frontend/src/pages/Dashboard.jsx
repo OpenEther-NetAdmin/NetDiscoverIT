@@ -1,21 +1,57 @@
-import React from 'react';
-import { Box, SimpleGrid, Stat, StatLabel, StatNumber, StatHelpText, Card, CardHeader, Heading, CardBody, Table, Thead, Tbody, Tr, Th, Td, Badge } from '@chakra-ui/react';
+import React, { useState, useEffect } from 'react';
+import { Box, SimpleGrid, Stat, StatLabel, StatNumber, StatHelpText, Card, CardHeader, Heading, CardBody, Table, Thead, Tbody, Tr, Th, Td, Badge, Spinner, Flex } from '@chakra-ui/react';
+import api from '../services/api';
 
 const Dashboard = () => {
-  // Mock data
-  const stats = {
-    totalDevices: 42,
-    activeDiscoveries: 2,
-    issues: 5,
-    lastDiscovery: '2026-03-01 14:30:00'
+  const [stats, setStats] = useState({
+    totalDevices: 0,
+    activeDiscoveries: 0,
+    issues: 0,
+    lastDiscovery: null
+  });
+  const [recentDevices, setRecentDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [devices, discoveries] = await Promise.all([
+        api.getDevices(),
+        api.getDiscoveries()
+      ]);
+      
+      const deviceList = devices || [];
+      const discoveryList = discoveries || [];
+      const activeDiscoveries = discoveryList.filter(d => d.status === 'running');
+      
+      setStats({
+        totalDevices: deviceList.length,
+        activeDiscoveries: activeDiscoveries.length,
+        issues: 0,
+        lastDiscovery: discoveryList.length > 0 ? discoveryList[0].created_at : null
+      });
+      
+      setRecentDevices(deviceList.slice(0, 5));
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const recentDevices = [
-    { hostname: 'core-rtr-01', ip: '10.0.0.1', type: 'router', vendor: 'cisco', status: 'online' },
-    { hostname: 'core-sw-01', ip: '10.0.0.2', type: 'switch', vendor: 'cisco', status: 'online' },
-    { hostname: 'dist-sw-01', ip: '10.0.0.3', type: 'switch', vendor: 'arista', status: 'online' },
-    { hostname: 'fw-edge-01', ip: '10.0.0.4', type: 'firewall', vendor: 'palo_alto', status: 'warning' },
-  ];
+  if (loading) {
+    return (
+      <Box p={6}>
+        <Flex justify="center" align="center" h="400px">
+          <Spinner size="xl" />
+        </Flex>
+      </Box>
+    );
+  }
 
   return (
     <Box p={6}>
@@ -57,8 +93,8 @@ const Dashboard = () => {
           <CardBody>
             <Stat>
               <StatLabel>Last Discovery</StatLabel>
-              <StatNumber fontSize="lg">{stats.lastDiscovery}</StatNumber>
-              <StatHelpText>2 hours ago</StatHelpText>
+              <StatNumber fontSize="lg">{stats.lastDiscovery ? new Date(stats.lastDiscovery).toLocaleDateString() : 'N/A'}</StatNumber>
+              <StatHelpText>{stats.lastDiscovery ? new Date(stats.lastDiscovery).toLocaleTimeString() : 'No discoveries yet'}</StatHelpText>
             </Stat>
           </CardBody>
         </Card>
@@ -70,32 +106,38 @@ const Dashboard = () => {
           <Heading size="md">Recent Devices</Heading>
         </CardHeader>
         <CardBody>
-          <Table variant="simple" size="sm">
-            <Thead>
-              <Tr>
-                <Th>Hostname</Th>
-                <Th>IP Address</Th>
-                <Th>Type</Th>
-                <Th>Vendor</Th>
-                <Th>Status</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {recentDevices.map((device) => (
-                <Tr key={device.hostname}>
-                  <Td fontWeight="medium">{device.hostname}</Td>
-                  <Td>{device.ip}</Td>
-                  <Td>{device.type}</Td>
-                  <Td>{device.vendor}</Td>
-                  <Td>
-                    <Badge colorScheme={device.status === 'online' ? 'green' : 'orange'}>
-                      {device.status}
-                    </Badge>
-                  </Td>
+          {recentDevices.length > 0 ? (
+            <Table variant="simple" size="sm">
+              <Thead>
+                <Tr>
+                  <Th>Hostname</Th>
+                  <Th>IP Address</Th>
+                  <Th>Type</Th>
+                  <Th>Vendor</Th>
+                  <Th>Status</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
+              </Thead>
+              <Tbody>
+                {recentDevices.map((device) => (
+                  <Tr key={device.id}>
+                    <Td fontWeight="medium">{device.hostname}</Td>
+                    <Td>{device.management_ip}</Td>
+                    <Td>{device.device_type}</Td>
+                    <Td>{device.vendor}</Td>
+                    <Td>
+                      <Badge colorScheme="green">
+                        online
+                      </Badge>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          ) : (
+            <Box p={4} textAlign="center" color="gray.500">
+              No devices found. Run a discovery to populate the inventory.
+            </Box>
+          )}
         </CardBody>
       </Card>
     </Box>

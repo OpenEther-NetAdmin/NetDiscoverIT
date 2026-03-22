@@ -31,7 +31,7 @@ class VectorUploader:
         }
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "X-Agent-Key": self.api_key,
             "Content-Type": "application/json"
         }
         
@@ -84,7 +84,7 @@ class VectorUploader:
         import httpx
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "X-Agent-Key": self.api_key,
         }
         
         url = f"{self.api_endpoint}/api/v1/agent/recommendations?device_id={device_id}"
@@ -109,6 +109,28 @@ class VectorUploader:
         return str(uuid4())
     
     def _get_customer_id(self) -> str:
-        """Get customer ID from config"""
-        # TODO: Implement proper customer ID management
+        """Get customer ID (organization_id) from local database"""
+        try:
+            import aiosqlite
+            import os
+            
+            db_path = os.getenv("AGENT_DB_PATH", "/app/data/agent.db")
+            if os.path.exists(db_path):
+                import asyncio
+                
+                async def get_org_id():
+                    async with aiosqlite.connect(db_path) as db:
+                        db.row_factory = aiosqlite.Row
+                        async with db.execute(
+                            "SELECT organization_id FROM agents LIMIT 1"
+                        ) as cursor:
+                            row = await cursor.fetchone()
+                            return row["organization_id"] if row else None
+                
+                org_id = asyncio.run(get_org_id())
+                if org_id:
+                    return org_id
+        except Exception as logger:
+            pass
+        
         return "default-customer"

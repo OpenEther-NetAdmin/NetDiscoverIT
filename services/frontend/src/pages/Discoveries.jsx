@@ -1,14 +1,56 @@
-import React from 'react';
-import { Box, Heading, Card, CardBody, CardHeader, Button, Badge, Table, Thead, Tbody, Tr, Th, Td, Flex, Text, Progress, VStack } from '@chakra-ui/react';
+import React, { useState, useEffect } from 'react';
+import { Box, Heading, Card, CardBody, CardHeader, Button, Badge, Table, Thead, Tbody, Tr, Th, Td, Flex, Text, Progress, VStack, Spinner, useToast } from '@chakra-ui/react';
 import { FiPlay, FiClock, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import api from '../services/api';
 
 const Discoveries = () => {
-  const discoveries = [
-    { id: 1, name: 'Full Network Scan', status: 'completed', devices: 42, started: '2026-03-01T14:00:00Z', completed: '2026-03-01T14:30:00Z', duration: '30m' },
-    { id: 2, name: 'Quick Scan', status: 'running', devices: 38, started: '2026-03-01T16:00:00Z', progress: 85, duration: null },
-    { id: 3, name: 'Weekly Full Scan', status: 'completed', devices: 40, started: '2026-02-22T02:00:00Z', completed: '2026-02-22T02:45:00Z', duration: '45m' },
-    { id: 4, name: 'VLAN Update', status: 'failed', devices: 0, started: '2026-03-01T10:00:00Z', completed: null, error: 'SSH connection timeout', duration: null },
-  ];
+  const [discoveries, setDiscoveries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    loadDiscoveries();
+  }, []);
+
+  const loadDiscoveries = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getDiscoveries();
+      setDiscoveries(data || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createDiscovery = async () => {
+    try {
+      setCreating(true);
+      await api.createDiscovery({
+        name: 'New Discovery',
+        discovery_type: 'full',
+      });
+      toast({
+        title: 'Discovery started',
+        status: 'success',
+        duration: 3000,
+      });
+      await loadDiscoveries();
+    } catch (err) {
+      toast({
+        title: 'Failed to start discovery',
+        description: err.message,
+        status: 'error',
+        duration: 5000,
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -28,11 +70,23 @@ const Discoveries = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <Box p={6}>
+        <Flex justify="center" align="center" h="400px">
+          <Spinner size="xl" />
+        </Flex>
+      </Box>
+    );
+  }
+
   return (
     <Box p={6}>
       <Flex justify="space-between" align="center" mb={6}>
         <Heading size="lg">Discoveries</Heading>
-        <Button leftIcon={<FiPlay />} colorScheme="blue">New Discovery</Button>
+        <Button leftIcon={<FiPlay />} colorScheme="blue" onClick={createDiscovery} isLoading={creating}>
+          New Discovery
+        </Button>
       </Flex>
       
       {/* Running Discoveries */}
@@ -49,9 +103,9 @@ const Discoveries = () => {
                     <Text fontWeight="semibold">{discovery.name}</Text>
                     <Badge colorScheme="blue">Running</Badge>
                   </Flex>
-                  <Progress value={discovery.progress} colorScheme="blue" size="sm" borderRadius="full" />
+                  <Progress value={discovery.progress || 0} colorScheme="blue" size="sm" borderRadius="full" />
                   <Text fontSize="sm" color="gray.500" mt={2}>
-                    {discovery.devices} devices discovered • {discovery.progress}% complete
+                    {discovery.device_count || 0} devices discovered
                   </Text>
                 </CardBody>
               </Card>
@@ -76,7 +130,7 @@ const Discoveries = () => {
                 <Th>Status</Th>
                 <Th>Devices</Th>
                 <Th>Started</Th>
-                <Th>Duration</Th>
+                <Th>Completed</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -91,9 +145,9 @@ const Discoveries = () => {
                       </Flex>
                     </Badge>
                   </Td>
-                  <Td>{discovery.devices}</Td>
-                  <Td fontSize="sm">{new Date(discovery.started).toLocaleString()}</Td>
-                  <Td>{discovery.duration || '-'}</Td>
+                  <Td>{discovery.device_count || 0}</Td>
+                  <Td fontSize="sm">{discovery.created_at ? new Date(discovery.created_at).toLocaleString() : '-'}</Td>
+                  <Td fontSize="sm">{discovery.completed_at ? new Date(discovery.completed_at).toLocaleString() : '-'}</Td>
                 </Tr>
               ))}
             </Tbody>

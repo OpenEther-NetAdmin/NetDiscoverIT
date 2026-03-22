@@ -1,25 +1,34 @@
-import React, { useState } from 'react';
-import { Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Badge, Input, InputGroup, InputLeftElement, Select, Button, Flex, Card, CardBody, useDisclosure } from '@chakra-ui/react';
+import React, { useState, useEffect } from 'react';
+import { Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Badge, Input, InputGroup, InputLeftElement, Select, Button, Flex, Card, CardBody, useDisclosure, Spinner, Text } from '@chakra-ui/react';
 import { FiSearch, FiRefreshCw, FiPlus } from 'react-icons/fi';
+import api from '../services/api';
 
 const Devices = () => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  
-  // Mock data
-  const devices = [
-    { id: 1, hostname: 'core-rtr-01', ip: '10.0.0.1', vendor: 'cisco', type: 'router', role: 'core', status: 'online', lastSeen: '2026-03-01T14:30:00Z' },
-    { id: 2, hostname: 'core-sw-01', ip: '10.0.0.2', vendor: 'cisco', type: 'switch', role: 'core', status: 'online', lastSeen: '2026-03-01T14:30:00Z' },
-    { id: 3, hostname: 'dist-sw-01', ip: '10.0.0.3', vendor: 'arista', type: 'switch', role: 'distribution', status: 'online', lastSeen: '2026-03-01T14:29:00Z' },
-    { id: 4, hostname: 'dist-sw-02', ip: '10.0.0.4', vendor: 'arista', type: 'switch', role: 'distribution', status: 'online', lastSeen: '2026-03-01T14:29:00Z' },
-    { id: 5, hostname: 'fw-edge-01', ip: '10.0.0.5', vendor: 'palo_alto', type: 'firewall', role: 'edge', status: 'warning', lastSeen: '2026-03-01T14:25:00Z' },
-    { id: 6, hostname: 'fw-dmz-01', ip: '10.0.0.6', vendor: 'palo_alto', type: 'firewall', role: 'dmz', status: 'online', lastSeen: '2026-03-01T14:28:00Z' },
-    { id: 7, hostname: 'acc-sw-01', ip: '10.0.0.10', vendor: 'cisco', type: 'switch', role: 'access', status: 'online', lastSeen: '2026-03-01T14:27:00Z' },
-    { id: 8, hostname: 'acc-sw-02', ip: '10.0.0.11', vendor: 'cisco', type: 'switch', role: 'access', status: 'offline', lastSeen: '2026-03-01T10:00:00Z' },
-  ];
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadDevices();
+  }, []);
+
+  const loadDevices = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getDevices();
+      setDevices(data || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredDevices = devices.filter(d => {
-    const matchesSearch = d.hostname.toLowerCase().includes(search.toLowerCase()) || d.ip.includes(search);
+    const matchesSearch = d.hostname?.toLowerCase().includes(search.toLowerCase()) || d.management_ip?.includes(search);
     const matchesFilter = filter === 'all' || d.status === filter;
     return matchesSearch && matchesFilter;
   });
@@ -33,12 +42,31 @@ const Devices = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <Box p={6}>
+        <Flex justify="center" align="center" h="400px">
+          <Spinner size="xl" />
+        </Flex>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box p={6}>
+        <Text color="red.500">{error}</Text>
+        <Button mt={4} onClick={loadDevices}>Retry</Button>
+      </Box>
+    );
+  }
+
   return (
     <Box p={6}>
       <Flex justify="space-between" align="center" mb={6}>
         <Heading size="lg">Devices</Heading>
         <Flex gap={2}>
-          <Button leftIcon={<FiRefreshCw />} variant="outline">Refresh</Button>
+          <Button leftIcon={<FiRefreshCw />} variant="outline" onClick={loadDevices}>Refresh</Button>
           <Button leftIcon={<FiPlus />} colorScheme="blue">Add Device</Button>
         </Flex>
       </Flex>
@@ -84,17 +112,17 @@ const Devices = () => {
               {filteredDevices.map((device) => (
                 <Tr key={device.id} _hover={{ bg: 'gray.50' }} cursor="pointer">
                   <Td fontWeight="medium">{device.hostname}</Td>
-                  <Td fontFamily="mono" fontSize="sm">{device.ip}</Td>
-                  <Td textTransform="capitalize">{device.vendor.replace('_', ' ')}</Td>
-                  <Td textTransform="capitalize">{device.type}</Td>
+                  <Td fontFamily="mono" fontSize="sm">{device.management_ip}</Td>
+                  <Td textTransform="capitalize">{device.vendor?.replace('_', ' ')}</Td>
+                  <Td textTransform="capitalize">{device.device_type}</Td>
                   <Td textTransform="capitalize">{device.role}</Td>
                   <Td>
-                    <Badge colorScheme={getStatusColor(device.status)}>
-                      {device.status}
+                    <Badge colorScheme={getStatusColor(device.status || 'online')}>
+                      {device.status || 'online'}
                     </Badge>
                   </Td>
                   <Td fontSize="sm" color="gray.500">
-                    {new Date(device.lastSeen).toLocaleString()}
+                    {device.updated_at ? new Date(device.updated_at).toLocaleString() : 'N/A'}
                   </Td>
                 </Tr>
               ))}

@@ -123,7 +123,7 @@ async def audit_log(
     resource_id: str = None,
     resource_name: str = None,
     outcome: str = "success",
-    details: dict = {},
+    details: dict = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -138,6 +138,8 @@ async def audit_log(
         outcome: 'success', 'failure', or 'denied'
         details: Additional details as a dict
     """
+    if details is None:
+        details = {}
     audit_entry = AuditLog(
         id=uuid4(),
         organization_id=UUID(current_user.organization_id),

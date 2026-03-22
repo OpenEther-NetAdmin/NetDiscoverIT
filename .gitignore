@@ -6,3 +6,6 @@ __pycache__/
 # Local virtual environments
 services/api/.venv/
 services/frontend/node_modules/
+
+# Git worktrees
+.worktrees/

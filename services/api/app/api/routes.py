@@ -43,6 +43,14 @@ async def list_devices(
     )
     devices = result.scalars().all()
 
+    await dependencies.audit_log(
+        action="device.list",
+        resource_type="device",
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return [
         schemas.Device(
             id=str(d.id),
@@ -84,6 +92,16 @@ async def get_device(
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    await dependencies.audit_log(
+        action="device.view",
+        resource_type="device",
+        resource_id=device_id,
+        resource_name=device.hostname,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return schemas.Device(
         id=str(device.id),
         hostname=device.hostname,
@@ -119,6 +137,16 @@ async def create_device(
     db.add(device_obj)
     await db.commit()
     await db.refresh(device_obj)
+
+    await dependencies.audit_log(
+        action="device.create",
+        resource_type="device",
+        resource_id=str(device_obj.id),
+        resource_name=device_obj.hostname,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
 
     return schemas.Device(
         id=str(device_obj.id),
@@ -171,6 +199,16 @@ async def update_device(
     await db.commit()
     await db.refresh(device)
 
+    await dependencies.audit_log(
+        action="device.update",
+        resource_type="device",
+        resource_id=device_id,
+        resource_name=device.hostname,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return schemas.Device(
         id=str(device.id),
         hostname=device.hostname,
@@ -211,6 +249,16 @@ async def delete_device(
 
     await db.delete(device)
     await db.commit()
+
+    await dependencies.audit_log(
+        action="device.delete",
+        resource_type="device",
+        resource_id=device_id,
+        resource_name=device.hostname,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
 
     return None
 

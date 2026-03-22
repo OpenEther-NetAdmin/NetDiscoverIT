@@ -2,7 +2,8 @@
 API Dependencies
 """
 
-from uuid import UUID
+from uuid import UUID, uuid4
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Header, status
 from sqlalchemy import select
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import User
 from app.core.config import settings
 from app.core.security import decode_token
-from app.models.models import LocalAgent, User as UserModel
+from app.models.models import AuditLog, LocalAgent, User as UserModel
 
 from app.db.database import get_db
 
@@ -114,3 +115,43 @@ async def get_agent_auth(
         )
 
     return agent_context
+
+
+async def audit_log(
+    action: str,
+    resource_type: str,
+    resource_id: str = None,
+    resource_name: str = None,
+    outcome: str = "success",
+    details: dict = {},
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Write an audit log entry for the current request.
+
+    Args:
+        action: The action performed (e.g., 'device.view', 'device.create')
+        resource_type: The type of resource (e.g., 'device', 'site', 'credential')
+        resource_id: The ID of the resource (optional)
+        resource_name: The name of the resource (optional)
+        outcome: 'success', 'failure', or 'denied'
+        details: Additional details as a dict
+    """
+    audit_entry = AuditLog(
+        id=uuid4(),
+        organization_id=UUID(current_user.organization_id),
+        user_id=UUID(current_user.id),
+        action=action,
+        resource_type=resource_type,
+        resource_id=UUID(resource_id) if resource_id else None,
+        resource_name=resource_name,
+        outcome=outcome,
+        details=details,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    db.add(audit_entry)
+    await db.commit()
+
+    return audit_entry

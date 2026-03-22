@@ -127,7 +127,7 @@ async def refresh_token(
             detail="Invalid or expired refresh token",
         )
 
-    result = await db.execute(select(User).where(User.id == uuid4(user_id)))
+    result = await db.execute(select(User).where(User.id == UUID(user_id)))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:

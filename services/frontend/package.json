@@ -3,20 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.1.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.28.0",
     "react-scripts": "5.0.1",
     "@tanstack/react-query": "^5.62.0",
     "axios": "^1.7.0",
     "reactflow": "^11.11.0",
     "d3": "^7.9.0",
     "recharts": "^2.15.0",
-    "@chakra-ui/react": "^3.0.0",
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
-    "framer-motion": "^11.15.0",
-    "date-fns": "^4.1.0"
+    "@chakra-ui/react": "^2.10.0",
+    "@chakra-ui/icons": "^2.2.0",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "framer-motion": "^10.18.0",
+    "date-fns": "^3.6.0",
+    "react-icons": "^5.0.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -31,6 +33,9 @@
     "extends": [
       "react-app"
     ]
+  },
+  "devDependencies": {
+    "typescript": "4.9.5"
   },
   "browserslist": {
     "production": [

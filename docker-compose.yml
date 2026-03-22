@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   # =============================================================================
   # POSTGRES DATABASE
   # =============================================================================
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: netdiscoverit-postgres
     restart: unless-stopped
     environment:

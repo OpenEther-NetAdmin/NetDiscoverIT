@@ -10,10 +10,14 @@ depends_on = None
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from pgvector.sqlalchemy import Vector
 
 
 def upgrade():
     """Upgrade database to latest schema."""
+
+    # Enable pgvector extension
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     # Create all tables based on the current models
     op.create_table(
@@ -88,7 +92,42 @@ def upgrade():
     )
 
     op.create_table(
-        "devices",
+        "sites",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "organization_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("description", sa.Text),
+        sa.Column("site_type", sa.String(length=50), default="on_premises"),
+        sa.Column("location_address", sa.String(length=500)),
+        sa.Column("timezone", sa.String(length=100), default="UTC"),
+        sa.Column("metadata", postgresql.JSONB, default=dict),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            onupdate=sa.text("now()"),
+        ),
+        sa.UniqueConstraint("organization_id", "name", name="uq_sites_org_name"),
+        sa.Index("idx_sites_organization_id", "organization_id"),
+        sa.Index("idx_sites_site_type", "site_type"),
+    )
+
+    op.create_table(
+        "local_agents",
         sa.Column(
             "id",
             postgresql.UUID(as_uuid=True),
@@ -102,109 +141,31 @@ def upgrade():
             nullable=False,
         ),
         sa.Column(
-            "scan_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("scans.id", ondelete="SET NULL"),
-        ),
-        sa.Column("hostname", sa.String(length=255)),
-        sa.Column("ip_address", postgresql.INET, nullable=False),
-        sa.Column("mac_address", postgresql.MACADDR),
-        sa.Column("vendor", sa.String(length=100)),
-        sa.Column("model", sa.String(length=100)),
-        sa.Column("os_type", sa.String(length=50)),
-        sa.Column("os_version", sa.String(length=100)),
-        sa.Column("device_type", sa.String(length=50)),
-        sa.Column("device_role", sa.String(length=50)),
-        sa.Column("serial_number", sa.String(length=100)),
-        sa.Column("location", sa.String(length=255)),
-        sa.Column("compliance_scope", postgresql.JSONB, default=list),
-        sa.Column("metadata", postgresql.JSONB, default=dict),
-        sa.Column(
-            "discovered_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Column(
-            "last_seen", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Column("is_active", sa.Boolean, default=True),
-        sa.Column(
             "site_id",
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("sites.id", ondelete="SET NULL"),
         ),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("api_key_hash", sa.String(length=255), nullable=False),
+        sa.Column("agent_version", sa.String(length=50)),
+        sa.Column("last_seen", sa.DateTime(timezone=True)),
+        sa.Column("last_ip", sa.String(length=45)),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column("capabilities", postgresql.JSONB, default=dict),
         sa.Column(
-            "agent_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("local_agents.id", ondelete="SET NULL"),
-        ),
-        sa.Column("role_vector", postgresql.ARRAY(sa.Float), postgresql_using="vector"),
-        sa.Column(
-            "topology_vector", postgresql.ARRAY(sa.Float), postgresql_using="vector"
-        ),
-        sa.Column(
-            "security_vector", postgresql.ARRAY(sa.Float), postgresql_using="vector"
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
         ),
         sa.Column(
-            "config_vector", postgresql.ARRAY(sa.Float), postgresql_using="vector"
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            onupdate=sa.text("now()"),
         ),
-        sa.Index("idx_devices_organization_id", "organization_id"),
-        sa.Index("idx_devices_ip_address", "ip_address"),
-        sa.Index("idx_devices_mac_address", "mac_address"),
-        sa.Index("idx_devices_hostname", "hostname"),
-        sa.Index("idx_devices_vendor", "vendor"),
-        sa.Index("idx_devices_device_type", "device_type"),
-        sa.Index("idx_devices_last_seen", "last_seen"),
-        sa.Index("idx_devices_site_id", "site_id"),
-        sa.Index("idx_devices_agent_id", "agent_id"),
-        sa.Index(
-            "idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"
-        ),
-        sa.Index(
-            "uq_devices_org_ip_active",
-            "organization_id",
-            "ip_address",
-            postgresql_where=sa.text("is_active = true"),
-            unique=True,
-        ),
-    )
-
-    op.create_table(
-        "interfaces",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "device_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("devices.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column("name", sa.String(length=100), nullable=False),
-        sa.Column("description", sa.Text),
-        sa.Column("mac_address", postgresql.MACADDR),
-        sa.Column("ip_address", postgresql.INET),
-        sa.Column("subnet_mask", postgresql.INET),
-        sa.Column("status", sa.String(length=20), default="unknown"),
-        sa.Column("admin_status", sa.String(length=20), default="unknown"),
-        sa.Column("speed", sa.Integer),
-        sa.Column("duplex", sa.String(length=20)),
-        sa.Column("mtu", sa.Integer),
-        sa.Column("vlan_id", sa.Integer),
-        sa.Column("metadata", postgresql.JSONB, default=dict),
-        sa.Column(
-            "discovered_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Column(
-            "last_seen", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Index("idx_interfaces_device_id", "device_id"),
-        sa.Index("idx_interfaces_name", "name"),
-        sa.Index("idx_interfaces_ip_address", "ip_address"),
-        sa.Index("idx_interfaces_mac_address", "mac_address"),
-        sa.Index("idx_interfaces_vlan_id", "vlan_id"),
-        sa.Index("idx_interfaces_status", "status"),
+        sa.UniqueConstraint("organization_id", "name", name="uq_local_agents_org_name"),
+        sa.Index("idx_local_agents_organization_id", "organization_id"),
+        sa.Index("idx_local_agents_site_id", "site_id"),
+        sa.Index("idx_local_agents_is_active", "is_active"),
+        sa.Index("idx_local_agents_last_seen", "last_seen"),
     )
 
     op.create_table(
@@ -288,6 +249,120 @@ def upgrade():
     )
 
     op.create_table(
+        "devices",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "organization_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "scan_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("scans.id", ondelete="SET NULL"),
+        ),
+        sa.Column("hostname", sa.String(length=255)),
+        sa.Column("ip_address", postgresql.INET, nullable=False),
+        sa.Column("mac_address", postgresql.MACADDR),
+        sa.Column("vendor", sa.String(length=100)),
+        sa.Column("model", sa.String(length=100)),
+        sa.Column("os_type", sa.String(length=50)),
+        sa.Column("os_version", sa.String(length=100)),
+        sa.Column("device_type", sa.String(length=50)),
+        sa.Column("device_role", sa.String(length=50)),
+        sa.Column("serial_number", sa.String(length=100)),
+        sa.Column("location", sa.String(length=255)),
+        sa.Column("compliance_scope", postgresql.JSONB, default=list),
+        sa.Column("metadata", postgresql.JSONB, default=dict),
+        sa.Column(
+            "discovered_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
+        ),
+        sa.Column(
+            "last_seen", sa.DateTime(timezone=True), server_default=sa.text("now()")
+        ),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column(
+            "site_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("sites.id", ondelete="SET NULL"),
+        ),
+        sa.Column(
+            "agent_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("local_agents.id", ondelete="SET NULL"),
+        ),
+        sa.Column("role_vector", Vector(768)),
+        sa.Column("topology_vector", Vector(768)),
+        sa.Column("security_vector", Vector(768)),
+        sa.Column("config_vector", Vector(768)),
+        sa.Index("idx_devices_organization_id", "organization_id"),
+        sa.Index("idx_devices_ip_address", "ip_address"),
+        sa.Index("idx_devices_mac_address", "mac_address"),
+        sa.Index("idx_devices_hostname", "hostname"),
+        sa.Index("idx_devices_vendor", "vendor"),
+        sa.Index("idx_devices_device_type", "device_type"),
+        sa.Index("idx_devices_last_seen", "last_seen"),
+        sa.Index("idx_devices_site_id", "site_id"),
+        sa.Index("idx_devices_agent_id", "agent_id"),
+        sa.Index(
+            "idx_devices_compliance_scope", "compliance_scope", postgresql_using="gin"
+        ),
+        sa.Index(
+            "uq_devices_org_ip_active",
+            "organization_id",
+            "ip_address",
+            postgresql_where=sa.text("is_active = true"),
+            unique=True,
+        ),
+    )
+
+    op.create_table(
+        "interfaces",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "device_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("devices.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(length=100), nullable=False),
+        sa.Column("description", sa.Text),
+        sa.Column("mac_address", postgresql.MACADDR),
+        sa.Column("ip_address", postgresql.INET),
+        sa.Column("subnet_mask", postgresql.INET),
+        sa.Column("status", sa.String(length=20), default="unknown"),
+        sa.Column("admin_status", sa.String(length=20), default="unknown"),
+        sa.Column("speed", sa.Integer),
+        sa.Column("duplex", sa.String(length=20)),
+        sa.Column("mtu", sa.Integer),
+        sa.Column("vlan_id", sa.Integer),
+        sa.Column("metadata", postgresql.JSONB, default=dict),
+        sa.Column(
+            "discovered_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
+        ),
+        sa.Column(
+            "last_seen", sa.DateTime(timezone=True), server_default=sa.text("now()")
+        ),
+        sa.Index("idx_interfaces_device_id", "device_id"),
+        sa.Index("idx_interfaces_name", "name"),
+        sa.Index("idx_interfaces_ip_address", "ip_address"),
+        sa.Index("idx_interfaces_mac_address", "mac_address"),
+        sa.Index("idx_interfaces_vlan_id", "vlan_id"),
+        sa.Index("idx_interfaces_status", "status"),
+    )
+
+    op.create_table(
         "configurations",
         sa.Column(
             "id",
@@ -357,83 +432,6 @@ def upgrade():
     )
 
     op.create_table(
-        "sites",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "organization_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column("name", sa.String(length=255), nullable=False),
-        sa.Column("description", sa.Text),
-        sa.Column("site_type", sa.String(length=50), default="on_premises"),
-        sa.Column("location_address", sa.String(length=500)),
-        sa.Column("timezone", sa.String(length=100), default="UTC"),
-        sa.Column("metadata", postgresql.JSONB, default=dict),
-        sa.Column("is_active", sa.Boolean, default=True),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            onupdate=sa.text("now()"),
-        ),
-        sa.UniqueConstraint("organization_id", "name", name="uq_sites_org_name"),
-        sa.Index("idx_sites_organization_id", "organization_id"),
-        sa.Index("idx_sites_site_type", "site_type"),
-    )
-
-    op.create_table(
-        "local_agents",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            primary_key=True,
-            default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "organization_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "site_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("sites.id", ondelete="SET NULL"),
-        ),
-        sa.Column("name", sa.String(length=255), nullable=False),
-        sa.Column("api_key_hash", sa.String(length=255), nullable=False),
-        sa.Column("agent_version", sa.String(length=50)),
-        sa.Column("last_seen", sa.DateTime(timezone=True)),
-        sa.Column("last_ip", sa.String(length=45)),
-        sa.Column("is_active", sa.Boolean, default=True),
-        sa.Column("capabilities", postgresql.JSONB, default=dict),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            onupdate=sa.text("now()"),
-        ),
-        sa.UniqueConstraint("organization_id", "name", name="uq_local_agents_org_name"),
-        sa.Index("idx_local_agents_organization_id", "organization_id"),
-        sa.Index("idx_local_agents_site_id", "site_id"),
-        sa.Index("idx_local_agents_is_active", "is_active"),
-        sa.Index("idx_local_agents_last_seen", "last_seen"),
-    )
-
-    op.create_table(
         "audit_logs",
         sa.Column(
             "id",
@@ -478,6 +476,98 @@ def upgrade():
         sa.Index("idx_audit_logs_resource_type_id", "resource_type", "resource_id"),
     )
 
+    op.create_table(
+        "alert_rules",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "organization_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("rule_type", sa.String(length=50), nullable=False),
+        sa.Column("conditions", postgresql.JSONB, default=dict),
+        sa.Column("severity", sa.String(length=20), default="medium"),
+        sa.Column("notify_integration_ids", postgresql.JSONB, default=list),
+        sa.Column("site_ids", postgresql.JSONB, default=list),
+        sa.Column("device_ids", postgresql.JSONB, default=list),
+        sa.Column("is_enabled", sa.Boolean, default=True),
+        sa.Column(
+            "created_by",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            onupdate=sa.text("now()"),
+        ),
+        sa.Index("idx_alert_rules_organization_id", "organization_id"),
+        sa.Index("idx_alert_rules_rule_type", "rule_type"),
+        sa.Index("idx_alert_rules_is_enabled", "is_enabled"),
+    )
+
+    op.create_table(
+        "alert_events",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "organization_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "rule_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("alert_rules.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "device_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("devices.id", ondelete="SET NULL"),
+        ),
+        sa.Column(
+            "agent_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("local_agents.id", ondelete="SET NULL"),
+        ),
+        sa.Column("severity", sa.String(length=20), nullable=False),
+        sa.Column("title", sa.String(length=500), nullable=False),
+        sa.Column("details", postgresql.JSONB, default=dict),
+        sa.Column("notifications_sent", postgresql.JSONB, default=list),
+        sa.Column(
+            "acknowledged_by",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+        ),
+        sa.Column("acknowledged_at", sa.DateTime(timezone=True)),
+        sa.Column("resolved_at", sa.DateTime(timezone=True)),
+        sa.Column("resolution_notes", sa.Text),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+        ),
+        sa.Index("idx_alert_events_organization_id", "organization_id"),
+        sa.Index("idx_alert_events_rule_id", "rule_id"),
+        sa.Index("idx_alert_events_device_id", "device_id"),
+        sa.Index("idx_alert_events_severity", "severity"),
+        sa.Index("idx_alert_events_created_at", "created_at"),
+        sa.Index("idx_alert_events_resolved_at", "resolved_at"),
+    )
+
     # Create pgvector extension
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -486,15 +576,17 @@ def downgrade():
     """Downgrade database to previous schema."""
 
     # Drop tables in reverse order to respect foreign key constraints
+    op.drop_table("alert_events")
+    op.drop_table("alert_rules")
     op.drop_table("audit_logs")
-    op.drop_table("local_agents")
-    op.drop_table("sites")
     op.drop_table("credentials")
     op.drop_table("configurations")
-    op.drop_table("scans")
-    op.drop_table("discoveries")
     op.drop_table("interfaces")
     op.drop_table("devices")
+    op.drop_table("scans")
+    op.drop_table("discoveries")
+    op.drop_table("local_agents")
+    op.drop_table("sites")
     op.drop_table("users")
     op.drop_table("organizations")
 

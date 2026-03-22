@@ -1,0 +1,82 @@
+%%{ init: { "theme": "base", "themeVariables": { "primaryColor": "#4f46e5", "lineColor": "#6b7280", "secondaryColor": "#10b981", "tertiaryColor": "#f59e0b" } } }%%
+
+```mermaid
+sequenceDiagram
+    participant Device as Network Device
+    participant Scanner as scanner.py
+    participant Collector as collector.py
+    participant Sanitizer as sanitizer.py
+    participant Vectorizer as vectorizer.py
+    participant API as FastAPI
+    participant DB as PostgreSQL
+    participant Neo4j as Neo4j
+
+    Note over Scanner,API: Phase 1: Discovery & Collection
+    
+    Scanner->>Device: SSH/SNMP Connect
+    Device-->>Scanner: Device Info
+    Scanner->>Collector: Device metadata
+    
+    Collector->>Device: Get running config
+    Device-->>Collector: Raw config text
+    Collector->>Scanner: Config data
+    
+    Note over Scanner,API: Phase 2: Sanitization (CRITICAL)
+    
+    Collector->>Sanitizer: Raw config
+    activate Sanitizer
+    
+    Note right of Sanitizer: Tier 1: TextFSM<br/>(precise, template-based)
+    Sanitizer->>Sanitizer: Apply Tier 1
+    
+    Note right of Sanitizer: Tier 2: Section Regex<br/>(heuristic, section-aware)
+    Sanitizer->>Sanitizer: Apply Tier 2
+    
+    Note right of Sanitizer: Tier 3: Aggressive Regex<br/>(catch-all, fail-safe)
+    Sanitizer->>Sanitizer: Apply Tier 3
+    
+    Sanitizer-->>Collector: Sanitized config + Redaction log
+    deactivate Sanitizer
+    
+    Note over Collector: Redaction log tracks what was<br/>redacted without storing secrets
+    
+    Collector->>Vectorizer: Sanitized config
+    activate Vectorizer
+    Vectorizer->>Vectorizer: Generate embeddings
+    Vectorizer-->>Collector: Embeddings
+    deactivate Vectorizer
+    
+    Note over Scanner,API: Phase 3: Upload to Cloud
+    
+    Collector->>API: POST /api/v1/discoveries
+        Note right of API: Payload contains:<br/>- Sanitized config<br/>- Embeddings<br/>- Topology relationships<br/>- NO raw secrets/passwords
+    API->>DB: Store device metadata
+    API->>DB: Store vector embeddings (768-dim)
+    API->>Neo4j: Store topology graph
+    API-->>Collector: 200 OK
+    
+    Note over DB,Neo4j: Data available for:<br/>- Semantic search (vectors)<br/>- Topology visualization (graph)<br/>- Change detection (diffs)
+```
+
+### Data Flow Stages
+
+**Stage 1: Discovery & Collection**
+- Scanner connects via SSH/SNMP
+- Collects device metadata and running configs
+- Runs on customer premises
+
+**Stage 2: Sanitization (CRITICAL)**
+- Config passes through 3-tier sanitizer
+- Tier 1: TextFSM templates (precise)
+- Tier 2: Section-aware regex (heuristic)
+- Tier 3: Aggressive regex (catch-all)
+- Redaction log tracks what was removed
+
+**Stage 3: Vectorization**
+- Sanitized config converted to embeddings
+- 768-dimensional vectors for semantic search
+
+**Stage 4: Cloud Upload**
+- Only sanitized data leaves customer network
+- Embeddings stored in PostgreSQL (pgvector)
+- Topology relationships in Neo4j

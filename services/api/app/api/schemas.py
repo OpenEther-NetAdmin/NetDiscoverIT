@@ -428,3 +428,94 @@ class AgentUploadResponse(BaseModel):
     uploaded: int
     updated: int
     errors: list[str]
+
+
+class AlertRuleType(str, Enum):
+    """Alert rule types"""
+    CONFIG_DRIFT = "config_drift"
+    NEW_DEVICE = "new_device"
+    DEVICE_OFFLINE = "device_offline"
+    INTERFACE_DOWN = "interface_down"
+    SECURITY_REGRESSION = "security_regression"
+    AGENT_OFFLINE = "agent_offline"
+    COMPLIANCE_SCOPE_CHANGE = "compliance_scope_change"
+
+
+class AlertSeverity(str, Enum):
+    """Alert severity levels"""
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class AlertRuleBase(BaseModel):
+    """Base alert rule schema"""
+    name: str
+    rule_type: AlertRuleType
+    conditions: dict = {}
+    severity: AlertSeverity = AlertSeverity.MEDIUM
+    notify_integration_ids: list[str] = []
+    site_ids: list[str] = []
+    device_ids: list[str] = []
+    is_enabled: bool = True
+
+
+class AlertRuleCreate(AlertRuleBase):
+    """Alert rule creation schema"""
+    pass
+
+
+class AlertRuleUpdate(BaseModel):
+    """Alert rule update schema"""
+    name: str | None = None
+    rule_type: AlertRuleType | None = None
+    conditions: dict | None = None
+    severity: AlertSeverity | None = None
+    notify_integration_ids: list[str] | None = None
+    site_ids: list[str] | None = None
+    device_ids: list[str] | None = None
+    is_enabled: bool | None = None
+
+
+class AlertRuleResponse(AlertRuleBase):
+    """Alert rule response schema"""
+    id: str
+    organization_id: str
+    created_by: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AlertEventBase(BaseModel):
+    """Base alert event schema"""
+    severity: AlertSeverity
+    title: str
+    details: dict = {}
+
+
+class AlertEventResponse(AlertEventBase):
+    """Alert event response schema"""
+    id: str
+    organization_id: str
+    rule_id: str
+    device_id: str | None = None
+    agent_id: str | None = None
+    notifications_sent: list[dict] = []
+    acknowledged_by: str | None = None
+    acknowledged_at: datetime | None = None
+    resolved_at: datetime | None = None
+    resolution_notes: str | None = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AlertEventAcknowledge(BaseModel):
+    """Schema for acknowledging an alert event"""
+    resolution_notes: str | None = None

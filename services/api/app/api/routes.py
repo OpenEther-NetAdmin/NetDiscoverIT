@@ -584,6 +584,14 @@ async def list_sites(
     )
     sites = result.scalars().all()
 
+    await dependencies.audit_log(
+        action="site.list",
+        resource_type="site",
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return [
         schemas.SiteResponse(
             id=str(s.id),
@@ -626,6 +634,16 @@ async def get_site(
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
 
+    await dependencies.audit_log(
+        action="site.view",
+        resource_type="site",
+        resource_id=site_id,
+        resource_name=site.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return schemas.SiteResponse(
         id=str(site.id),
         name=site.name,
@@ -663,6 +681,16 @@ async def create_site(
     db.add(site_obj)
     await db.commit()
     await db.refresh(site_obj)
+
+    await dependencies.audit_log(
+        action="site.create",
+        resource_type="site",
+        resource_id=str(site_obj.id),
+        resource_name=site_obj.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
 
     return schemas.SiteResponse(
         id=str(site_obj.id),
@@ -711,6 +739,16 @@ async def update_site(
     await db.commit()
     await db.refresh(site)
 
+    await dependencies.audit_log(
+        action="site.update",
+        resource_type="site",
+        resource_id=site_id,
+        resource_name=site.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return schemas.SiteResponse(
         id=str(site.id),
         name=site.name,
@@ -752,5 +790,15 @@ async def delete_site(
 
     await db.delete(site)
     await db.commit()
+
+    await dependencies.audit_log(
+        action="site.delete",
+        resource_type="site",
+        resource_id=site_id,
+        resource_name=site.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
 
     return None

@@ -5,6 +5,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from app.api import dependencies
@@ -23,7 +24,49 @@ class DummyResult:
         return self._value
 
     def scalar_one_or_none(self):
+        if isinstance(self._value, list):
+            return self._value[0] if self._value else None
         return self._value
+
+    def scalar_one_or_none(self):
+        return self._value
+
+
+class DummyScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value
+
+
+class DummyScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value
+
+
+def _make_device(device_id, hostname, org_id):
+    device = MagicMock()
+    device.id = UUID(str(device_id))
+    device.hostname = hostname
+    device.ip_address = "10.0.0.1"
+    device.vendor = "cisco"
+    device.device_type = "router"
+    device.device_role = "core"
+    device.organization_id = UUID(str(org_id))
+    now = datetime.now(timezone.utc)
+    device.created_at = now
+    device.updated_at = now
+    return device
 
 
 @pytest.mark.asyncio
@@ -44,27 +87,11 @@ async def test_device_routes_write_audit_logs():
 
     device_id = str(uuid4())
     device_uuid = UUID(device_id)
-    device = MagicMock()
-    device.id = device_uuid
-    device.hostname = "device-one"
-    device.ip_address = "10.0.0.1"
-    device.vendor = "cisco"
-    device.device_type = "router"
-    device.device_role = "core"
-    device.organization_id = UUID(mock_user.organization_id)
-    device.created_at = None
-    device.updated_at = None
-
-    created_device = MagicMock()
-    created_device.id = UUID(str(uuid4()))
-    created_device.hostname = "new-device"
-    created_device.ip_address = "10.0.0.2"
+    device = _make_device(device_uuid, "device-one", mock_user.organization_id)
+    created_device = _make_device(uuid4(), "new-device", mock_user.organization_id)
     created_device.vendor = "arista"
     created_device.device_type = "switch"
     created_device.device_role = "access"
-    created_device.organization_id = UUID(mock_user.organization_id)
-    created_device.created_at = None
-    created_device.updated_at = None
 
     audit_calls = []
 
@@ -73,7 +100,7 @@ async def test_device_routes_write_audit_logs():
         return kwargs.get("action")
 
     async def fake_execute(*args, **kwargs):
-        return DummyResult(device)
+        return DummyScalarResult([device])
 
     original_audit_log = dependencies.audit_log
     original_routes_audit_log = routes.dependencies.audit_log

@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -9,7 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 import pytest
 
 from app.api import auth, dependencies, routes
-from app.api.auth import AgentCreate, UserCreate, UserLogin
+from app.api.auth import UserCreate, UserLogin
 from app.api.schemas import DeviceCreate, DeviceUpdate, SiteCreate, SiteUpdate, User
 
 
@@ -27,12 +28,107 @@ class DummyResult:
         return self._value
 
 
+class DummyScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value
+
+
+class ObjectListResult:
+    def __init__(self, items):
+        self._items = items
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._items
+
+    def scalar_one_or_none(self):
+        return self._items[0] if self._items else None
+
+
+class SingleObjectResult:
+    def __init__(self, item):
+        self._item = item
+
+    def scalar_one_or_none(self):
+        return self._item
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return [self._item] if self._item is not None else []
+
+
+class DummyScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._value
+
+
 def _mock_user() -> User:
     return User(
         id=str(uuid4()),
         email="test@example.com",
         organization_id=str(uuid4()),
         role="admin",
+    )
+
+
+def _mock_device(org_id: UUID, *, device_id: UUID | None = None, hostname: str = "device-1"):
+    return SimpleNamespace(
+        id=device_id or uuid4(),
+        hostname=hostname,
+        ip_address="10.0.0.1",
+        vendor="cisco",
+        device_type="router",
+        device_role="core",
+        organization_id=org_id,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+def _mock_site(org_id: UUID, *, site_id: UUID | None = None, name: str = "site-1"):
+    return SimpleNamespace(
+        id=site_id or uuid4(),
+        name=name,
+        description="desc",
+        site_type="branch",
+        location_address="addr",
+        timezone="UTC",
+        organization_id=org_id,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+
+def _mock_agent(org_id: UUID, *, agent_id: UUID | None = None, name: str = "agent-1"):
+    return SimpleNamespace(
+        id=agent_id or uuid4(),
+        name=name,
+        api_key_hash="hash",
+        organization_id=org_id,
+        site_id=None,
+        agent_version="1.0",
+        last_seen=None,
+        is_active=True,
+        capabilities={},
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
 
 
@@ -53,21 +149,12 @@ async def test_device_routes_trigger_audit_log(audit_spy):
     user = _mock_user()
     org_id = UUID(user.organization_id)
 
-    device = SimpleNamespace(
-        id=uuid4(),
-        hostname="device-1",
-        ip_address="10.0.0.1",
-        vendor="cisco",
-        device_type="router",
-        device_role="core",
-        organization_id=org_id,
-        created_at=None,
-        updated_at=None,
-    )
-
-    created_device = SimpleNamespace(**device.__dict__)
-    created_device.id = uuid4()
-    created_device.hostname = "device-2"
+    device = _mock_device(org_id)
+    device.created_at = None
+    device.updated_at = None
+    created_device = _mock_device(org_id, hostname="device-2")
+    created_device.created_at = None
+    created_device.updated_at = None
 
     db = AsyncMock()
     db.add = MagicMock()
@@ -78,8 +165,8 @@ async def test_device_routes_trigger_audit_log(audit_spy):
     async def execute_side_effect(*args, **kwargs):
         query = str(args[0])
         if "WHERE devices.organization_id =" in query and "devices.id" not in query:
-            return DummyResult([device])
-        return DummyResult(device)
+            return ObjectListResult([device])
+        return SingleObjectResult(device)
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
@@ -129,25 +216,14 @@ async def test_site_routes_trigger_audit_log(audit_spy):
     user = _mock_user()
     org_id = UUID(user.organization_id)
 
-    site = SimpleNamespace(
-        id=uuid4(),
-        name="site-1",
-        description="desc",
-        site_type="branch",
-        location_address="addr",
-        timezone="UTC",
-        organization_id=org_id,
-        is_active=True,
-        created_at=None,
-        updated_at=None,
-    )
+    site = _mock_site(org_id)
 
     db = AsyncMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
-    db.execute = AsyncMock(return_value=DummyResult([site]))
+    db.execute = AsyncMock(side_effect=[ObjectListResult([site]), SingleObjectResult(site), DummyResult(None), DummyResult(site), DummyResult(site)])
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
@@ -191,25 +267,13 @@ async def test_agent_routes_trigger_audit_log(audit_spy):
     user = _mock_user()
     org_id = UUID(user.organization_id)
 
-    agent = SimpleNamespace(
-        id=uuid4(),
-        name="agent-1",
-        api_key_hash="hash",
-        organization_id=org_id,
-        site_id=None,
-        agent_version="1.0",
-        last_seen=None,
-        is_active=True,
-        capabilities={},
-        created_at=None,
-        updated_at=None,
-    )
+    agent = _mock_agent(org_id)
 
     db = AsyncMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
-    db.execute = AsyncMock(return_value=DummyResult(agent))
+    db.execute = AsyncMock(side_effect=[ObjectListResult([agent]), SingleObjectResult(agent), DummyResult(agent), DummyResult(agent)])
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)

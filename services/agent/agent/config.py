@@ -2,9 +2,12 @@
 Agent Configuration
 """
 
+import os
+from pathlib import Path
+
+import yaml
 from pydantic import BaseModel
 from typing import Dict, List, Optional
-import yaml
 
 
 class SSHConfig(BaseModel):
@@ -81,7 +84,6 @@ class AgentConfig(BaseModel):
     @classmethod
     def from_env(cls) -> "AgentConfig":
         """Load config from environment variables"""
-        import os
         return cls(
             API_KEY=os.getenv("API_KEY", ""),
             API_ENDPOINT=os.getenv("API_ENDPOINT", "http://localhost:8000"),

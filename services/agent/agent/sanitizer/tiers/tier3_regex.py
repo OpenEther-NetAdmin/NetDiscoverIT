@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from typing import List, Tuple
@@ -12,7 +14,12 @@ class Tier3Result:
 
 
 class AggressiveRegexSanitizer:
-    """Tier 3: Catch-all regex-based sanitization (fail-safe)"""
+    """Tier 3: Catch-all regex-based sanitization (fail-safe).
+
+    This sanitizer uses broad regex patterns to catch common sensitive data
+    types that may not be caught by Tier 1 or Tier 2. It serves as a final
+    safety net to ensure no sensitive data escapes sanitization.
+    """
     
     # Patterns: (regex, token_type, description)
     PATTERNS: List[Tuple[re.Pattern, TokenType, str]] = [

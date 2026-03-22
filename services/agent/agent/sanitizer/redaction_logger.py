@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
 
+HASH_TRUNCATION = 16
+
 
 @dataclass
 class RedactionEntry:
@@ -25,8 +27,7 @@ class RedactionLogger:
     def log(self, original: str, replacement: str, line: int,
             data_type: str, tier: int) -> RedactionEntry:
         """Log a single redaction"""
-        # Hash the original for verification without storing it
-        original_hash = hashlib.sha256(original.encode()).hexdigest()[:16]
+        original_hash = hashlib.sha256(original.encode()).hexdigest()[:HASH_TRUNCATION]
         
         entry = RedactionEntry(
             data_type=data_type,
@@ -61,6 +62,11 @@ class RedactionLogger:
             ]
         }
     
+    def set_tiers_used(self, tiers: List[int]) -> None:
+        """Set the tiers that were used during sanitization."""
+        if tiers:
+            self._tier_used = min(tiers)
+
     def reset(self):
         """Clear all entries"""
         self.entries = []

@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from agent.sanitizer.token_mapper import TokenMapper, TokenType
 
@@ -12,7 +14,11 @@ class Tier2Result:
 
 
 class SectionRegexSanitizer:
-    """Tier 2: Section-aware regex sanitization"""
+    """Tier 2: Section-aware regex sanitization.
+
+    This sanitizer detects configuration sections (interface, router bgp, etc.)
+    and applies targeted regex rules based on the section context.
+    """
 
     SECTION_PATTERNS = {
         "interface": re.compile(r"^interface\s+(\S+)", re.MULTILINE),

@@ -1,62 +1,37 @@
+from __future__ import annotations
+
 import re
-from typing import Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 from agent.sanitizer.redaction_logger import RedactionLogger
+from agent.sanitizer.tier_resolver import Tier, TierResolver
 from agent.sanitizer.token_mapper import TokenMapper, TokenType
+from agent.sanitizer.tiers.tier2_section import SectionRegexSanitizer
 from agent.sanitizer.tiers.tier3_regex import AggressiveRegexSanitizer
 
 
 class ConfigSanitizer:
     """Orchestrates tiered sanitization of network device configs.
 
-    Tier 1 (Precise): Known token types via TokenMapper (pass-through)
-    Tier 2 (Heuristic): Additional regex for common sensitive fields
-    Tier 3 (Catch-all): AggressiveRegexSanitizer
+    Tier 1 (Precise): Known token types via TextFSM templates
+    Tier 2 (Heuristic): SectionRegexSanitizer for common sensitive fields
+    Tier 3 (Catch-all): AggressiveRegexSanitizer as fail-safe
     """
 
-    TIER2_PATTERNS = [
-        (re.compile(r"AKIA[0-9A-Z]{16}"), TokenType.SECRET, "AWS Access Key"),
-        (
-            re.compile(r"-----BEGIN [A-Z]+ PRIVATE KEY-----"),
-            TokenType.SECRET,
-            "SSH Key",
-        ),
-        (
-            re.compile(
-                r'api[_-]?key["\s:=]+["\']?([a-zA-Z0-9_\-]{16,})["\']?', re.IGNORECASE
-            ),
-            TokenType.SECRET,
-            "API Key",
-        ),
-        (re.compile(r"Bearer\s+([a-zA-Z0-9_\-\.]+)"), TokenType.SECRET, "Bearer Token"),
-        (
-            re.compile(r"Authorization:\s*Basic\s+([a-zA-Z0-9+/=]+)"),
-            TokenType.SECRET,
-            "Basic Auth",
-        ),
-        (
-            re.compile(r"enable\s+password\s+(\S+)", re.IGNORECASE),
-            TokenType.PASSWORD,
-            "Enable Password",
-        ),
-    ]
-
-    SENSITIVE_KEYS = frozenset(
-        [
-            "password",
-            "secret",
-            "passwd",
-            "credential",
-            "auth",
-            "api_key",
-            "apikey",
-            "token",
-            "private_key",
-            "key",
-            "enable_password",
-            "enable_secret",
-        ]
-    )
+    SENSITIVE_KEYS = frozenset([
+        "password",
+        "secret",
+        "passwd",
+        "credential",
+        "auth",
+        "api_key",
+        "apikey",
+        "token",
+        "private_key",
+        "key",
+        "enable_password",
+        "enable_secret",
+    ])
 
     def __init__(
         self,
@@ -64,21 +39,33 @@ class ConfigSanitizer:
         enable_tier1: bool = True,
         enable_tier2: bool = True,
         enable_tier3: bool = True,
+        custom_tokens: Optional[Dict[str, str]] = None,
     ):
         self.org_id = org_id
         self.enable_tier1 = enable_tier1
         self.enable_tier2 = enable_tier2
         self.enable_tier3 = enable_tier3
 
-        self.token_mapper = TokenMapper()
+        self.token_mapper = TokenMapper(custom_tokens)
         self.redaction_logger = RedactionLogger(org_id)
+        self.tier_resolver = TierResolver()
+        self.tier2_sanitizer = SectionRegexSanitizer()
         self.tier3_sanitizer = AggressiveRegexSanitizer()
 
-    def sanitize(self, config: Union[str, dict]) -> dict:
+    def register_template(self, device_type: str) -> None:
+        """Register a TextFSM template for Tier 1 sanitization."""
+        self.tier_resolver.register_template(device_type)
+
+    def sanitize(
+        self,
+        config: Union[str, dict],
+        device_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Sanitize configuration content.
 
         Args:
             config: Raw config as string or dict (JSON)
+            device_type: Optional device type for TierResolver (e.g., "cisco_ios")
 
         Returns:
             dict with "sanitized" and "redaction_log" keys
@@ -88,22 +75,33 @@ class ConfigSanitizer:
         if isinstance(config, dict):
             sanitized = self._sanitize_dict(config)
         else:
-            sanitized = self._sanitize_text(config)
+            sanitized = self._sanitize_text(config, device_type)
 
         return {
             "sanitized": sanitized,
             "redaction_log": self.redaction_logger.get_redaction_map(),
         }
 
-    def _sanitize_text(self, text: str) -> str:
+    def _sanitize_text(self, text: str, device_type: Optional[str] = None) -> str:
         """Sanitize string config through all enabled tiers."""
         result = text
+        tiers_used: List[int] = []
 
         if self.enable_tier1:
-            result = self._apply_tier1(result)
+            result = self._apply_tier1(result, device_type)
+            tiers_used.append(1)
 
         if self.enable_tier2:
-            result = self._apply_tier2(result)
+            result, tier2_redactions = self._apply_tier2(result)
+            for redaction in tier2_redactions:
+                self.redaction_logger.log(
+                    original=redaction.get("original", ""),
+                    replacement=redaction["token"],
+                    line=redaction["line"],
+                    data_type=redaction["data_type"],
+                    tier=redaction["tier"],
+                )
+            tiers_used.append(2)
 
         if self.enable_tier3:
             tier3_result = self.tier3_sanitizer.sanitize(result)
@@ -116,65 +114,25 @@ class ConfigSanitizer:
                     data_type=redaction["data_type"],
                     tier=redaction["tier"],
                 )
+            tiers_used.append(3)
+
+        if tiers_used:
+            self.redaction_logger.set_tiers_used(tiers_used)
 
         return result
 
-    def _apply_tier1(self, text: str) -> str:
-        """Tier 1: Pass-through (TokenMapper handles known types)."""
+    def _apply_tier1(
+        self,
+        text: str,
+        device_type: Optional[str] = None,
+    ) -> str:
+        """Tier 1: Pass-through (TextFSM templates will be used in future)."""
         return text
 
-    def _apply_tier2(self, text: str) -> str:
-        """Tier 2: Heuristic regex for common sensitive patterns."""
-        lines = text.split("\n")
-        sanitized_lines = []
-
-        for line_num, line in enumerate(lines, 1):
-            sanitized_line = line
-
-            for pattern, token_type, description in self.TIER2_PATTERNS:
-                matches = list(pattern.finditer(sanitized_line))
-                for match in reversed(matches):
-                    groups = match.groups()
-                    original = (
-                        next((g for g in groups if g is not None), match.group(0))
-                        if groups
-                        else match.group(0)
-                    )
-                    token = self.token_mapper.get_token(token_type)
-
-                    if match.groups():
-                        groups = match.groups()
-                        group_index = next(
-                            (
-                                i
-                                for i in range(len(groups), 0, -1)
-                                if groups[i - 1] is not None
-                            ),
-                            0,
-                        )
-                        sanitized_line = (
-                            sanitized_line[: match.start(group_index)]
-                            + token
-                            + sanitized_line[match.end(group_index):]
-                        )
-                    else:
-                        sanitized_line = (
-                            sanitized_line[:match.start()]
-                            + token
-                            + sanitized_line[match.end():]
-                        )
-
-                    self.redaction_logger.log(
-                        original=original,
-                        replacement=token,
-                        line=line_num,
-                        data_type=token_type.value,
-                        tier=2,
-                    )
-
-            sanitized_lines.append(sanitized_line)
-
-        return "\n".join(sanitized_lines)
+    def _apply_tier2(self, text: str) -> tuple[str, List[Dict[str, Any]]]:
+        """Tier 2: SectionRegexSanitizer for section-aware patterns."""
+        tier2_result = self.tier2_sanitizer.sanitize(text)
+        return tier2_result.sanitized_text, tier2_result.redactions
 
     def _sanitize_dict(self, data: Any) -> Any:
         """Recursively sanitize dict/JSON data."""

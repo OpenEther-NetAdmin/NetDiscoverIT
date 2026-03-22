@@ -325,6 +325,14 @@ async def list_agents(
     )
     agents = result.scalars().all()
 
+    await dependencies.audit_log(
+        action="agent.list",
+        resource_type="agent",
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return [
         schemas.AgentResponse(
             id=str(a.id),
@@ -367,6 +375,16 @@ async def get_agent(
 
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    await dependencies.audit_log(
+        action="agent.view",
+        resource_type="agent",
+        resource_id=agent_id,
+        resource_name=agent.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
 
     return schemas.AgentResponse(
         id=str(agent.id),
@@ -417,6 +435,16 @@ async def rotate_agent_key(
 
     await db.commit()
 
+    await dependencies.audit_log(
+        action="agent.rotate_key",
+        resource_type="agent",
+        resource_id=agent_id,
+        resource_name=agent.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return schemas.AgentRotateKeyResponse(
         agent_id=str(agent.id),
         new_api_key=new_api_key,
@@ -453,6 +481,16 @@ async def agent_heartbeat(
         agent.capabilities = heartbeat.capabilities
 
     await db.commit()
+
+    await dependencies.audit_log(
+        action="agent.heartbeat",
+        resource_type="agent",
+        resource_id=agent_id,
+        resource_name=agent.name,
+        outcome="success",
+        current_user=None,
+        db=db,
+    )
 
     return schemas.HeartbeatResponse(
         status="ok", agent_id=str(agent.id), last_seen=agent.last_seen

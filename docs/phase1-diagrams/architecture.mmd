@@ -1,6 +1,5 @@
 %%{ init: { "theme": "base", "themeVariables": { "primaryColor": "#4f46e5", "primaryTextColor": "#fff", "primaryBorderColor": "#4f46e5", "lineColor": "#6b7280", "secondaryColor": "#10b981", "tertiaryColor": "#f59e0b" } } }%%
 
-```mermaid
 flowchart TB
     subgraph Customer_Network["Customer Network (On-Premises)"]
         direction TB
@@ -46,28 +45,3 @@ flowchart TB
     style Customer_Network fill:#f3f4f6,stroke:#374151,stroke-width:2px
     style Agent_Service fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px
     style Cloud fill:#d1fae5,stroke:#059669,stroke-width:2px
-```
-
-### Architecture Overview
-
-**Customer Network (On-Premises)**
-- Network devices: routers, switches, firewalls
-- Local Agent runs in Docker container (never leaves customer site)
-
-**Agent Service Components**
-- `scanner.py`: Network discovery via SSH, SNMP, Nmap
-- `collector.py`: Configuration collection from devices
-- `sanitizer.py`: **CRITICAL** - Strips passwords, keys, secrets before upload
-- `topology.py`: CDP/LLDP topology mapping
-- `vectorizer.py`: Generates embeddings for semantic search
-- `uploader.py`: Sends only sanitized metadata to cloud
-
-**Cloud Platform**
-- FastAPI backend serving REST/GraphQL
-- PostgreSQL for structured data + vector embeddings
-- Neo4j for graph relationships
-- React frontend for visualization
-
-### Key Privacy Guarantee
-
-Raw device configurations **NEVER** leave the customer network. Only sanitized metadata, topology relationships, and vector embeddings are uploaded.

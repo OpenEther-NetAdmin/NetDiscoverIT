@@ -1,5 +1,6 @@
 %%{ init: { "theme": "base", "themeVariables": { "primaryColor": "#4f46e5", "lineColor": "#6b7280", "secondaryColor": "#10b981", "tertiaryColor": "#f59e0b" } } }%%
 
+```mermaid
 classDiagram
     %% Sanitizer Module
     class ConfigSanitizer {
@@ -115,3 +116,30 @@ classDiagram
     note for TierResolver "Determines which tier<br/>to use based on<br/>device type & config"
     note for TokenMapper "Maps data types to<br/>placeholder tokens"
     note for RedactionLogger "Audit trail - tracks<br/>redactions without<br/>storing secrets"
+```
+
+### Module Design Notes
+
+**ConfigSanitizer (Orchestrator)**
+- Coordinates the 3-tier sanitization pipeline
+- Uses TierResolver to determine which tiers to apply
+- Accepts custom tokens for enterprise deployments
+
+**TierResolver**
+- Priority: Tier 1 (if template exists) → Tier 2 (if structure detected) → Tier 3 (fallback)
+- Allows registration of TextFSM templates per device type
+
+**TokenMapper**
+- Provides consistent placeholder tokens
+- Default tokens: `<ip_address>`, `<password>`, `<secret>`, etc.
+- Supports custom token overrides
+
+**RedactionLogger**
+- Creates audit trail for compliance
+- Stores hashes (not actual values) for verification
+- Tracks which tier was used for each redaction
+
+**Sanitizer Tiers**
+- **SectionRegexSanitizer (Tier 2):** Detects config sections (interface, router bgp) and applies targeted rules
+- **AggressiveRegexSanitizer (Tier 3):** Catch-all patterns for common sensitive data
+- **TextFSMSanitizer (Tier 1):** Stub for future template-based precision

@@ -32,4 +32,11 @@ async def test_audit_log_creates_record():
     
     assert result is not None
     mock_db.add.assert_called_once()
+    audit_entry = mock_db.add.call_args[0][0]
+    assert audit_entry.action == "device.view"
+    assert audit_entry.resource_type == "device"
+    assert audit_entry.resource_name == "test-device"
+    assert audit_entry.outcome == "success"
+    assert str(audit_entry.user_id) == mock_user.id
+    assert str(audit_entry.organization_id) == mock_user.organization_id
     mock_db.commit.assert_called_once()

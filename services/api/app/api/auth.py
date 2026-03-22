@@ -12,6 +12,7 @@ from app.core.security import (
 )
 from app.db.database import get_db
 from app.models.models import User, LocalAgent
+from app.api import dependencies
 from app.api.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -61,6 +62,13 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
+        await dependencies.audit_log(
+            action="user.login_failed",
+            resource_type="user",
+            resource_name=credentials.email,
+            outcome="failure",
+            db=db,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -68,6 +76,13 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         )
 
     if not user.is_active:
+        await dependencies.audit_log(
+            action="user.login_failed",
+            resource_type="user",
+            resource_name=credentials.email,
+            outcome="denied",
+            db=db,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
         )
@@ -80,6 +95,15 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         }
     )
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    await dependencies.audit_log(
+        action="user.login",
+        resource_type="user",
+        resource_id=str(user.id),
+        resource_name=user.email,
+        outcome="success",
+        db=db,
+    )
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
@@ -149,6 +173,16 @@ async def register_agent(
     await db.commit()
     await db.refresh(agent)
 
+    await dependencies.audit_log(
+        action="user.register",
+        resource_type="agent",
+        resource_id=str(agent.id),
+        resource_name=agent.name,
+        outcome="success",
+        current_user=current_user,
+        db=db,
+    )
+
     return AgentResponse(
         agent_id=str(agent.id),
         organization_id=str(agent.organization_id),
@@ -189,6 +223,15 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
     db.add(new_user)
     await db.commit()
+
+    await dependencies.audit_log(
+        action="user.register",
+        resource_type="user",
+        resource_id=str(new_user.id),
+        resource_name=new_user.email,
+        outcome="success",
+        db=db,
+    )
 
     access_token = create_access_token(
         data={

@@ -28,6 +28,9 @@ class DummyResult:
             return self._value[0] if self._value else None
         return self._value
 
+    def one_or_none(self):
+        return self.scalar_one_or_none()
+
     def scalar_one_or_none(self):
         return self._value
 
@@ -41,6 +44,14 @@ class DummyScalarResult:
 
     def all(self):
         return self._value
+
+    def scalar_one_or_none(self):
+        if isinstance(self._value, list):
+            return self._value[0] if self._value else None
+        return self._value
+
+    def one_or_none(self):
+        return self.scalar_one_or_none()
 
 
 class DummyScalarResult:
@@ -100,6 +111,10 @@ async def test_device_routes_write_audit_logs():
         return kwargs.get("action")
 
     async def fake_execute(*args, **kwargs):
+        if getattr(routes, "Site", None) is not None and any(
+            getattr(arg, "name", None) == "sites" for arg in args
+        ):
+            return DummyScalarResult([])
         return DummyScalarResult([device])
 
     original_audit_log = dependencies.audit_log

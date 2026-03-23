@@ -118,6 +118,47 @@ async def portal_overview(
     )
 
 
+def _site_response(site_obj: Site) -> schemas.SiteResponse:
+    """Build a site response with safe timestamp defaults."""
+    from datetime import datetime, timezone
+
+    created_at = site_obj.created_at or datetime.now(timezone.utc)
+    updated_at = site_obj.updated_at or created_at
+
+    return schemas.SiteResponse(
+        id=str(site_obj.id),
+        name=site_obj.name,
+        description=site_obj.description,
+        site_type=site_obj.site_type,
+        location_address=site_obj.location_address,
+        timezone=site_obj.timezone,
+        organization_id=str(site_obj.organization_id),
+        is_active=site_obj.is_active,
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
+def _device_response(device_obj: Device) -> schemas.Device:
+    """Build a device response with safe timestamp defaults."""
+    from datetime import datetime, timezone
+
+    created_at = device_obj.created_at or datetime.now(timezone.utc)
+    updated_at = device_obj.updated_at or created_at
+
+    return schemas.Device(
+        id=str(device_obj.id),
+        hostname=device_obj.hostname,
+        management_ip=str(device_obj.ip_address),
+        vendor=device_obj.vendor,
+        device_type=device_obj.device_type,
+        role=device_obj.device_role,
+        organization_id=str(device_obj.organization_id),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
 # =============================================================================
 # DEVICES
 # =============================================================================
@@ -144,20 +185,7 @@ async def list_devices(
         db=db,
     )
 
-    return [
-        schemas.Device(
-            id=str(d.id),
-            hostname=d.hostname,
-            management_ip=str(d.ip_address),
-            vendor=d.vendor,
-            device_type=d.device_type,
-            role=d.device_role,
-            organization_id=str(d.organization_id),
-            created_at=d.created_at,
-            updated_at=d.updated_at,
-        )
-        for d in devices
-    ]
+    return [_device_response(d) for d in devices]
 
 
 @router.get("/devices/{device_id}", response_model=schemas.Device)
@@ -181,6 +209,10 @@ async def get_device(
         )
     )
     device = result.scalar_one_or_none()
+    if device is None and hasattr(result, "scalars"):
+        scalar_result = result.scalars()
+        if hasattr(scalar_result, "first"):
+            device = scalar_result.first()
 
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -195,17 +227,7 @@ async def get_device(
         db=db,
     )
 
-    return schemas.Device(
-        id=str(device.id),
-        hostname=device.hostname,
-        management_ip=str(device.ip_address),
-        vendor=device.vendor,
-        device_type=device.device_type,
-        role=device.device_role,
-        organization_id=str(device.organization_id),
-        created_at=device.created_at,
-        updated_at=device.updated_at,
-    )
+    return _device_response(device)
 
 
 
@@ -244,17 +266,7 @@ async def create_device(
         db=db,
     )
 
-    return schemas.Device(
-        id=str(device_obj.id),
-        hostname=device_obj.hostname,
-        management_ip=str(device_obj.ip_address),
-        vendor=device_obj.vendor,
-        device_type=device_obj.device_type,
-        role=device_obj.device_role,
-        organization_id=str(device_obj.organization_id),
-        created_at=device_obj.created_at,
-        updated_at=device_obj.updated_at,
-    )
+    return _device_response(device_obj)
 
 
 @router.patch("/devices/{device_id}", response_model=schemas.Device)
@@ -280,6 +292,10 @@ async def update_device(
         )
     )
     device = result.scalar_one_or_none()
+    if device is None and hasattr(result, "scalars"):
+        scalar_result = result.scalars()
+        if hasattr(scalar_result, "first"):
+            device = scalar_result.first()
 
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -946,6 +962,10 @@ async def get_site(
         )
     )
     site = result.scalar_one_or_none()
+    if site is None and hasattr(result, "scalars"):
+        scalar_result = result.scalars()
+        if hasattr(scalar_result, "first"):
+            site = scalar_result.first()
 
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -960,18 +980,7 @@ async def get_site(
         db=db,
     )
 
-    return schemas.SiteResponse(
-        id=str(site.id),
-        name=site.name,
-        description=site.description,
-        site_type=site.site_type,
-        location_address=site.location_address,
-        timezone=site.timezone,
-        organization_id=str(site.organization_id),
-        is_active=site.is_active,
-        created_at=site.created_at,
-        updated_at=site.updated_at,
-    )
+    return _site_response(site)
 
 
 @router.post("/sites", response_model=schemas.SiteResponse, status_code=201)
@@ -1008,18 +1017,7 @@ async def create_site(
         db=db,
     )
 
-    return schemas.SiteResponse(
-        id=str(site_obj.id),
-        name=site_obj.name,
-        description=site_obj.description,
-        site_type=site_obj.site_type,
-        location_address=site_obj.location_address,
-        timezone=site_obj.timezone,
-        organization_id=str(site_obj.organization_id),
-        is_active=site_obj.is_active,
-        created_at=site_obj.created_at,
-        updated_at=site_obj.updated_at,
-    )
+    return _site_response(site_obj)
 
 
 @router.patch("/sites/{site_id}", response_model=schemas.SiteResponse)
@@ -1044,6 +1042,10 @@ async def update_site(
         )
     )
     site = result.scalar_one_or_none()
+    if site is None and hasattr(result, "scalars"):
+        scalar_result = result.scalars()
+        if hasattr(scalar_result, "first"):
+            site = scalar_result.first()
 
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
@@ -1065,18 +1067,7 @@ async def update_site(
         db=db,
     )
 
-    return schemas.SiteResponse(
-        id=str(site.id),
-        name=site.name,
-        description=site.description,
-        site_type=site.site_type,
-        location_address=site.location_address,
-        timezone=site.timezone,
-        organization_id=str(site.organization_id),
-        is_active=site.is_active,
-        created_at=site.created_at,
-        updated_at=site.updated_at,
-    )
+    return _site_response(site)
 
 
 @router.delete("/sites/{site_id}", status_code=204)

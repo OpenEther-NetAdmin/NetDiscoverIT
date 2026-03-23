@@ -125,8 +125,8 @@ class PortalOverview(BaseModel):
     active_discoveries: int = 0
     total_alerts: int = 0
     open_alerts: int = 0
-    recent_devices: list[Device] = []
-    recent_discoveries: list[Discovery] = []
+    recent_devices: list[Device] = Field(default_factory=list)
+    recent_discoveries: list[Discovery] = Field(default_factory=list)
 
 
 class DiscoveryStatus(str, Enum):

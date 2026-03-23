@@ -38,6 +38,11 @@ class DummyScalarResult:
     def all(self):
         return self._value
 
+    def scalar_one_or_none(self):
+        if isinstance(self._value, list):
+            return self._value[0] if self._value else None
+        return self._value
+
 
 class ObjectListResult:
     def __init__(self, items):
@@ -52,6 +57,9 @@ class ObjectListResult:
     def scalar_one_or_none(self):
         return self._items[0] if self._items else None
 
+    def one_or_none(self):
+        return self.scalar_one_or_none()
+
 
 class SingleObjectResult:
     def __init__(self, item):
@@ -65,6 +73,9 @@ class SingleObjectResult:
 
     def all(self):
         return [self._item] if self._item is not None else []
+
+    def one_or_none(self):
+        return self._item
 
 
 class DummyScalarResult:
@@ -223,7 +234,13 @@ async def test_site_routes_trigger_audit_log(audit_spy):
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
-    db.execute = AsyncMock(side_effect=[ObjectListResult([site]), SingleObjectResult(site), DummyResult(None), DummyResult(site), DummyResult(site)])
+    db.execute = AsyncMock(side_effect=[
+        ObjectListResult([site]),
+        SingleObjectResult(site),
+        DummyResult(None),
+        SingleObjectResult(site),
+        SingleObjectResult(site),
+    ])
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
@@ -273,7 +290,12 @@ async def test_agent_routes_trigger_audit_log(audit_spy):
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
-    db.execute = AsyncMock(side_effect=[ObjectListResult([agent]), SingleObjectResult(agent), DummyResult(agent), DummyResult(agent)])
+    db.execute = AsyncMock(side_effect=[
+        ObjectListResult([agent]),
+        SingleObjectResult(agent),
+        SingleObjectResult(agent),
+        SingleObjectResult(agent),
+    ])
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)

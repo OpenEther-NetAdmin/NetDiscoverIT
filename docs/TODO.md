@@ -45,6 +45,7 @@
 - [ ] Alert delivery workflows (AlertRule → AlertEvent → notify IntegrationConfig)
 - [x] Change management workflow (ChangeRecord lifecycle + ContainerLab simulation)
 - [x] ACL Compliance Vault endpoints (zero-knowledge encrypted storage)
+- [x] Group 6a Vectorizer design & implementation plan (sentence-transformers all-mpnet-base-v2)
 - [ ] Export document generation (PDF, DOCX, Drawio, Visio) + MinIO/S3
 
 ### Frontend — Phase 2 Features

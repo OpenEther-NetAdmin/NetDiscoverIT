@@ -31,6 +31,8 @@ make db-shell       # psql into database
 - **Privacy First:** Raw device configs NEVER leave customer network. All data must be sanitized before upload.
 - **Required Secrets:** `POSTGRES_PASSWORD`, `JWT_SECRET_KEY`, `INTERNAL_API_KEY`, `CREDENTIAL_ENCRYPTION_KEY` (fail loudly if unset)
 - **Memory Repo:** Update claw-memory after every task completion
+- **Do not use git worktrees**
+- **All work is to be done inside Docker containers**
 
 ## Detailed Guidelines
 

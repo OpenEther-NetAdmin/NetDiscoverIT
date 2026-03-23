@@ -45,6 +45,7 @@ class AgentConfig(BaseModel):
     # API
     API_KEY: str = ""
     API_ENDPOINT: str = "http://localhost:8000"
+    ORG_ID: str = "default"
     
     # Discovery
     DISCOVERY_METHODS: List[str] = ["ssh", "snmp"]
@@ -87,6 +88,7 @@ class AgentConfig(BaseModel):
         return cls(
             API_KEY=os.getenv("API_KEY", ""),
             API_ENDPOINT=os.getenv("API_ENDPOINT", "http://localhost:8000"),
+            ORG_ID=os.getenv("ORG_ID", "default"),
             DISCOVERY_METHODS=os.getenv("DISCOVERY_METHODS", "ssh,snmp").split(","),
             SCAN_INTERVAL=os.getenv("SCAN_INTERVAL", "24h"),
             SSH_TIMEOUT=int(os.getenv("SSH_TIMEOUT", "30")),

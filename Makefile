@@ -8,8 +8,8 @@
 # =============================================================================
 # VARIABLES
 # =============================================================================
-COMPOSE := docker-compose
-COMPOSE_PROD := docker-compose -f docker-compose.prod.yml
+COMPOSE := docker compose
+COMPOSE_PROD := docker compose -f docker-compose.prod.yml
 PYTHON := python3
 PIP := pip3
 NODE := node

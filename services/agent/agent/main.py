@@ -51,7 +51,7 @@ class Agent:
         self.config = config
         self.collector = DeviceCollector(config)
         self.normalizer = ConfigNormalizer(config)
-        self.sanitizer = ConfigSanitizer()
+        self.sanitizer = ConfigSanitizer(org_id=config.ORG_ID)
         self.vectorizer = DeviceVectorizer(config)
         self.uploader = VectorUploader(config)
         self.scheduler = DiscoveryScheduler(config)

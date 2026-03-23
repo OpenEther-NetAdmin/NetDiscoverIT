@@ -14,11 +14,9 @@ RUN apt-get update && apt-get install -y \
     fprobe \
     nfdump \
     p0f \
-    zeek \
-    mongodb \
     && rm -rf /var/lib/apt/lists/*
 
-COPY docker/agent/requirements.txt /app/requirements.txt
+COPY services/agent/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY services/agent /app/agent
@@ -26,7 +24,7 @@ COPY configs/agent.yaml /app/config/agent.yaml
 
 RUN mkdir -p /app/data
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/agent
 ENV AGENT_CONFIG_PATH=/app/config/agent.yaml
 
 EXPOSE 8080
@@ -35,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["python", "-m", "agent.main"]
-CMD ["--mode", "continuous"]
+CMD []

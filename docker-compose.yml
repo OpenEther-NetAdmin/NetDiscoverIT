@@ -140,7 +140,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p $${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -157,6 +157,7 @@ services:
     environment:
       - API_KEY=${AGENT_API_KEY:-changeme}
       - API_ENDPOINT=${AGENT_API_ENDPOINT:-http://api:8000}
+      - ORG_ID=${AGENT_ORG_ID:-default}
       - DISCOVERY_METHODS=${AGENT_DISCOVERY_METHODS:-ssh,snmp,nmap,cdp,lldp,netflow}
       - SSH_TIMEOUT=${AGENT_SSH_TIMEOUT:-30}
       - SNMP_TIMEOUT=${AGENT_SNMP_TIMEOUT:-5}

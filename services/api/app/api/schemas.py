@@ -423,6 +423,10 @@ class DeviceMetadataUpload(BaseModel):
     metadata: dict = {}
     config_hash: str | None = None
     config_collected_at: datetime | None = None
+    role_vector: List[float] | None = None
+    topology_vector: List[float] | None = None
+    security_vector: List[float] | None = None
+    config_vector: List[float] | None = None
 
 
 class AgentUploadRequest(BaseModel):

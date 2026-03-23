@@ -4,7 +4,7 @@ API Schemas
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -32,14 +32,14 @@ class AgentAuth(BaseModel):
 class UserLogin(BaseModel):
     """User login request"""
 
-    email: EmailStr
+    email: str
     password: str
 
 
 class UserCreate(BaseModel):
     """User creation request"""
 
-    email: EmailStr
+    email: str
     password: str
     full_name: str | None = None
     role: str = "viewer"
@@ -48,7 +48,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """User update request"""
 
-    email: EmailStr | None = None
+    email: str | None = None
     full_name: str | None = None
     role: str | None = None
     password: str | None = None
@@ -127,6 +127,23 @@ class PortalOverview(BaseModel):
     open_alerts: int = 0
     recent_devices: list[Device] = Field(default_factory=list)
     recent_discoveries: list[Discovery] = Field(default_factory=list)
+
+
+class NormalizedIngestRecord(BaseModel):
+    """Shared normalized ingest record."""
+
+    vendor: str
+    command: str
+    records: list[dict] = Field(default_factory=list)
+    parser_method: str
+    template_name: str | None = None
+    template_source: str | None = None
+    parser_status: str = "success"
+    parser_confidence: float = 1.0
+    fallback_reason: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    schema_version: str = "1.0"
+    normalized_at: datetime | None = None
 
 
 class DiscoveryStatus(str, Enum):

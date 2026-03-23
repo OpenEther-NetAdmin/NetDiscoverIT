@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Dict
 
-from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
+from services.agent.agent.normalizer_textfsm.textfsm_parser import TextFSMParser
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +39,6 @@ class ConfigNormalizer:
         except Exception as e:
             logger.warning(f"Ollama normalization failed: {e}")
 
-        try:
-            return await self._normalize_gemini(raw_config)
-        except Exception as e:
-            logger.warning(f"Gemini normalization failed: {e}")
-
-        try:
-            return await self._normalize_anthropic(raw_config)
-        except Exception as e:
-            logger.warning(f"Anthropic normalization failed: {e}")
-
-        return self._normalize_rulebased(raw_config)
 
     def _get_vendor_key(self, vendor: str) -> str:
         """Map detected vendor to TextFSM template key"""
@@ -61,6 +50,10 @@ class ConfigNormalizer:
             "hp": "hp_procurve",
         }
         return vendor_map.get(vendor.lower(), "")
+
+
+def normalize_command_output(vendor: str, command: str, raw_output: str):
+    return TextFSMParser().parse(vendor, command, raw_output)
     
     async def _normalize_ollama(self, raw_config: str) -> Dict:
         """Use Ollama for normalization"""
@@ -247,3 +240,8 @@ Output valid JSON only, no explanations:"""
             vlans.append({"id": vlan_id, "name": name})
         
         return vlans
+from services.agent.agent.normalizer_textfsm.textfsm_parser import TextFSMParser
+
+
+def normalize_command_output(vendor: str, command: str, raw_output: str):
+    return TextFSMParser().parse(vendor, command, raw_output)

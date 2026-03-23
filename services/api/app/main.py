@@ -13,9 +13,9 @@ from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 import logging
 
-from app.core.config import settings
-from app.api import routes
-from app.api.auth import router as auth_router
+from services.api.app.core.config import settings
+from services.api.app.api import routes
+from services.api.app.api.auth import router as auth_router
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),

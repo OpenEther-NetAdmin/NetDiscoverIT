@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 import bcrypt
-from app.core.config import settings
+from services.api.app.core.config import settings
 
 
 def hash_password(password: str) -> str:

@@ -9,12 +9,12 @@ from fastapi import Depends, HTTPException, Header, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import User
-from app.core.config import settings
-from app.core.security import decode_token
-from app.models.models import AuditLog, LocalAgent, User as UserModel
+from services.api.app.api.schemas import User
+from services.api.app.core.config import settings
+from services.api.app.core.security import decode_token
+from services.api.app.models.models import AuditLog, LocalAgent, User as UserModel
 
-from app.db.database import get_db
+from services.api.app.db.database import get_db
 
 
 async def get_current_user(

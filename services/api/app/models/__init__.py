@@ -1,5 +1,5 @@
 # Models package
-from app.models.models import (
+from services.api.app.models.models import (
     Base,
     Organization,
     User,

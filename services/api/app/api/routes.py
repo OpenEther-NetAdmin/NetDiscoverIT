@@ -3,16 +3,16 @@ API Routes
 """
 
 from uuid import UUID, uuid4
-from fastapi import APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect, status
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import schemas
-from app.api import dependencies
-from app.api.dependencies import get_db, get_current_user, get_agent_auth
-from app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot
-from app.core.config import settings
+from services.api.app.api import schemas
+from services.api.app.api import dependencies
+from services.api.app.api.dependencies import get_db, get_current_user, get_agent_auth
+from services.api.app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot
+from services.api.app.core.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -26,6 +26,11 @@ def get_rate_limit(request: Request) -> str:
     return settings.RATE_LIMIT_READ
 
 router = APIRouter()
+
+
+@router.post("/ingest/normalized", status_code=status.HTTP_202_ACCEPTED)
+async def ingest_normalized_payload(payload: schemas.NormalizedIngestRecord):
+    return {"status": "accepted", "schema_version": payload.schema_version}
 
 
 # =============================================================================
@@ -1690,14 +1695,14 @@ async def create_integration(
     encrypted_creds = None
     if integration.credentials:
         from cryptography.fernet import Fernet
-        from app.core.config import settings
+        from services.api.app.core.config import settings
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         encrypted_creds = fernet.encrypt(credentials_json.encode()).decode()
 
     encrypted_webhook_secret = None
     if integration.webhook_secret:
         from cryptography.fernet import Fernet
-        from app.core.config import settings
+        from services.api.app.core.config import settings
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         encrypted_webhook_secret = fernet.encrypt(integration.webhook_secret.encode()).decode()
 
@@ -1774,7 +1779,7 @@ async def update_integration(
 
     if "credentials" in update_data and update_data["credentials"]:
         from cryptography.fernet import Fernet
-        from app.core.config import settings
+        from services.api.app.core.config import settings
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         credentials_json = json.dumps(update_data["credentials"])
         integration.encrypted_credentials = fernet.encrypt(credentials_json.encode()).decode()
@@ -1782,7 +1787,7 @@ async def update_integration(
 
     if "webhook_secret" in update_data and update_data["webhook_secret"]:
         from cryptography.fernet import Fernet
-        from app.core.config import settings
+        from services.api.app.core.config import settings
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         integration.webhook_secret = fernet.encrypt(update_data["webhook_secret"].encode()).decode()
         del update_data["webhook_secret"]
@@ -1895,7 +1900,7 @@ async def test_integration(
     credentials = None
     if integration.encrypted_credentials:
         from cryptography.fernet import Fernet
-        from app.core.config import settings
+        from services.api.app.core.config import settings
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         try:
             creds_decrypted = fernet.decrypt(integration.encrypted_credentials.encode()).decode()

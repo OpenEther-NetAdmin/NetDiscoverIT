@@ -1,19 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from uuid import uuid4, UUID
 import secrets
 
-from app.core.security import (
+from services.api.app.core.security import (
     hash_password,
     verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
 )
-from app.db.database import get_db
-from app.models.models import User, LocalAgent
-from app.api import dependencies
-from app.api.dependencies import get_current_user
+from services.api.app.db.database import get_db
+from services.api.app.models.models import User, LocalAgent
+from services.api.app.api import dependencies
+from services.api.app.api.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -27,12 +27,12 @@ class TokenResponse(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     full_name: str | None = None
     role: str = "viewer"

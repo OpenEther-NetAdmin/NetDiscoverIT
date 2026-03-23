@@ -659,3 +659,50 @@ class ChangeSimulateResponse(BaseModel):
 class ChangeSyncTicketRequest(BaseModel):
     """Request to sync change to external ticketing"""
     ticket_system: str
+
+
+class ACLSnapshotCreate(BaseModel):
+    """ACL snapshot creation request (agent-authenticated)"""
+    device_id: str
+    content_type: str
+    encrypted_blob: str
+    content_hmac: str
+    plaintext_size_bytes: int
+    key_id: str
+    key_provider: str
+    config_hash_at_capture: str | None = None
+    compliance_scope: list[str] = []
+
+
+class ACLSnapshotUpdate(BaseModel):
+    """ACL snapshot update request"""
+    compliance_scope: list[str] | None = None
+
+
+class ACLSnapshotResponse(BaseModel):
+    """ACL snapshot response"""
+    id: str
+    organization_id: str
+    device_id: str
+    content_type: str
+    encrypted_blob: str
+    content_hmac: str
+    plaintext_size_bytes: int | None = None
+    key_id: str
+    key_provider: str
+    encryption_algorithm: str
+    captured_at: datetime
+    captured_by: str | None = None
+    config_hash_at_capture: str | None = None
+    compliance_scope: list[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ACLSnapshotListResponse(BaseModel):
+    """Paginated ACL snapshot list"""
+    items: list[ACLSnapshotResponse]
+    total: int
+    skip: int
+    limit: int

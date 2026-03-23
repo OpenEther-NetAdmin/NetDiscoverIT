@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
-from app.models.models import Device, Site, LocalAgent, Discovery
+from app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot
 from app.core.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -2900,6 +2900,377 @@ async def change_webhook(
                 await db.commit()
     
     return {"status": "received"}
+
+
+# =============================================================================
+# ACL SNAPSHOTS (Compliance Vault)
+# =============================================================================
+@router.post(
+    "/acl-snapshots",
+    response_model=schemas.ACLSnapshotResponse,
+    status_code=201,
+)
+async def create_acl_snapshot(
+    snapshot_data: schemas.ACLSnapshotCreate,
+    db: AsyncSession = Depends(get_db),
+    agent: schemas.AgentAuth = Depends(get_agent_auth),
+):
+    """Create a new ACL snapshot (agent-authenticated)"""
+    from app.models.models import Organization
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == agent.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    snapshot = ACLSnapshot(
+        organization_id=agent.organization_id,
+        device_id=UUID(snapshot_data.device_id),
+        content_type=snapshot_data.content_type,
+        encrypted_blob=snapshot_data.encrypted_blob,
+        content_hmac=snapshot_data.content_hmac,
+        plaintext_size_bytes=snapshot_data.plaintext_size_bytes,
+        key_id=snapshot_data.key_id,
+        key_provider=snapshot_data.key_provider,
+        config_hash_at_capture=snapshot_data.config_hash_at_capture,
+        compliance_scope=snapshot_data.compliance_scope,
+    )
+    db.add(snapshot)
+    await db.commit()
+    await db.refresh(snapshot)
+
+    return schemas.ACLSnapshotResponse(
+        id=str(snapshot.id),
+        organization_id=str(snapshot.organization_id),
+        device_id=str(snapshot.device_id),
+        content_type=snapshot.content_type,
+        encrypted_blob=snapshot.encrypted_blob,
+        content_hmac=snapshot.content_hmac,
+        plaintext_size_bytes=snapshot.plaintext_size_bytes,
+        key_id=snapshot.key_id,
+        key_provider=snapshot.key_provider,
+        encryption_algorithm=snapshot.encryption_algorithm,
+        captured_at=snapshot.captured_at,
+        captured_by=str(snapshot.captured_by) if snapshot.captured_by else None,
+        config_hash_at_capture=snapshot.config_hash_at_capture,
+        compliance_scope=snapshot.compliance_scope or [],
+        created_at=snapshot.created_at,
+    )
+
+
+@router.get("/acl-snapshots", response_model=schemas.ACLSnapshotListResponse)
+async def list_acl_snapshots(
+    skip: int = 0,
+    limit: int = 100,
+    device_id: Optional[str] = None,
+    content_type: Optional[str] = None,
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List ACL snapshots for user's organization"""
+    org_id = UUID(current_user.organization_id)
+
+    query = select(ACLSnapshot).where(ACLSnapshot.organization_id == org_id)
+
+    if device_id:
+        query = query.where(ACLSnapshot.device_id == UUID(device_id))
+    if content_type:
+        query = query.where(ACLSnapshot.content_type == content_type)
+
+    query = query.order_by(ACLSnapshot.captured_at.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(query)
+    snapshots = result.scalars().all()
+
+    count_query = select(ACLSnapshot).where(ACLSnapshot.organization_id == org_id)
+    if device_id:
+        count_query = count_query.where(ACLSnapshot.device_id == UUID(device_id))
+    if content_type:
+        count_query = count_query.where(ACLSnapshot.content_type == content_type)
+
+    total_result = await db.execute(count_query)
+    total = len(total_result.scalars().all())
+
+    return schemas.ACLSnapshotListResponse(
+        items=[
+            schemas.ACLSnapshotResponse(
+                id=str(s.id),
+                organization_id=str(s.organization_id),
+                device_id=str(s.device_id),
+                content_type=s.content_type,
+                encrypted_blob=s.encrypted_blob,
+                content_hmac=s.content_hmac,
+                plaintext_size_bytes=s.plaintext_size_bytes,
+                key_id=s.key_id,
+                key_provider=s.key_provider,
+                encryption_algorithm=s.encryption_algorithm,
+                captured_at=s.captured_at,
+                captured_by=str(s.captured_by) if s.captured_by else None,
+                config_hash_at_capture=s.config_hash_at_capture,
+                compliance_scope=s.compliance_scope or [],
+                created_at=s.created_at,
+            )
+            for s in snapshots
+        ],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/acl-snapshots/{snapshot_id}", response_model=schemas.ACLSnapshotResponse)
+async def get_acl_snapshot(
+    snapshot_id: str,
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific ACL snapshot"""
+    try:
+        snapshot_uuid = UUID(snapshot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid snapshot ID format")
+
+    result = await db.execute(
+        select(ACLSnapshot).where(
+            ACLSnapshot.id == snapshot_uuid,
+            ACLSnapshot.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="ACL snapshot not found")
+
+    return schemas.ACLSnapshotResponse(
+        id=str(snapshot.id),
+        organization_id=str(snapshot.organization_id),
+        device_id=str(snapshot.device_id),
+        content_type=snapshot.content_type,
+        encrypted_blob=snapshot.encrypted_blob,
+        content_hmac=snapshot.content_hmac,
+        plaintext_size_bytes=snapshot.plaintext_size_bytes,
+        key_id=snapshot.key_id,
+        key_provider=snapshot.key_provider,
+        encryption_algorithm=snapshot.encryption_algorithm,
+        captured_at=snapshot.captured_at,
+        captured_by=str(snapshot.captured_by) if snapshot.captured_by else None,
+        config_hash_at_capture=snapshot.config_hash_at_capture,
+        compliance_scope=snapshot.compliance_scope or [],
+        created_at=snapshot.created_at,
+    )
+
+
+@router.delete("/acl-snapshots/{snapshot_id}", status_code=204)
+async def delete_acl_snapshot(
+    snapshot_id: str,
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an ACL snapshot"""
+    try:
+        snapshot_uuid = UUID(snapshot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid snapshot ID format")
+
+    result = await db.execute(
+        select(ACLSnapshot).where(
+            ACLSnapshot.id == snapshot_uuid,
+            ACLSnapshot.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="ACL snapshot not found")
+
+    await db.delete(snapshot)
+    await db.commit()
+
+
+@router.patch("/acl-snapshots/{snapshot_id}", response_model=schemas.ACLSnapshotResponse)
+async def update_acl_snapshot(
+    snapshot_id: str,
+    snapshot_data: schemas.ACLSnapshotUpdate,
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an ACL snapshot (e.g., compliance_scope)"""
+    try:
+        snapshot_uuid = UUID(snapshot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid snapshot ID format")
+
+    result = await db.execute(
+        select(ACLSnapshot).where(
+            ACLSnapshot.id == snapshot_uuid,
+            ACLSnapshot.organization_id == UUID(current_user.organization_id),
+        )
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="ACL snapshot not found")
+
+    if snapshot_data.compliance_scope is not None:
+        snapshot.compliance_scope = snapshot_data.compliance_scope
+
+    await db.commit()
+    await db.refresh(snapshot)
+
+    return schemas.ACLSnapshotResponse(
+        id=str(snapshot.id),
+        organization_id=str(snapshot.organization_id),
+        device_id=str(snapshot.device_id),
+        content_type=snapshot.content_type,
+        encrypted_blob=snapshot.encrypted_blob,
+        content_hmac=snapshot.content_hmac,
+        plaintext_size_bytes=snapshot.plaintext_size_bytes,
+        key_id=snapshot.key_id,
+        key_provider=snapshot.key_provider,
+        encryption_algorithm=snapshot.encryption_algorithm,
+        captured_at=snapshot.captured_at,
+        captured_by=str(snapshot.captured_by) if snapshot.captured_by else None,
+        config_hash_at_capture=snapshot.config_hash_at_capture,
+        compliance_scope=snapshot.compliance_scope or [],
+        created_at=snapshot.created_at,
+    )
+
+
+# =============================================================================
+# CHANGE SIMULATION (ContainerLab)
+# =============================================================================
+@router.post("/changes/{change_id}/simulate", response_model=schemas.ChangeSimulateResponse)
+async def trigger_simulation(
+    change_id: str,
+    request: schemas.ChangeSimulateRequest,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger ContainerLab simulation for a proposed change"""
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.models.models import ChangeRecord
+    from datetime import datetime
+    from uuid import uuid4
+    
+    try:
+        change_uuid = UUID(change_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid change ID format")
+    
+    org_id = UUID(current_user.organization_id)
+    result = await db.execute(
+        select(ChangeRecord).where(
+            ChangeRecord.id == change_uuid,
+            ChangeRecord.organization_id == org_id,
+        )
+    )
+    change = result.scalar_one_or_none()
+    
+    if not change:
+        raise HTTPException(status_code=404, detail="Change record not found")
+    
+    if change.status != "proposed":
+        raise HTTPException(
+            status_code=400,
+            detail="Can only simulate changes in proposed status"
+        )
+    
+    simulation_id = str(uuid4())
+    
+    import json
+    import redis.asyncio as redis
+    redis_client = redis.from_url(settings.REDIS_URL)
+    await redis_client.hset(
+        f"simulation:{simulation_id}",
+        mapping={
+            "change_id": str(change.id),
+            "organization_id": str(org_id),
+            "proposed_config": request.proposed_config,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+    )
+    await redis_client.expire(f"simulation:{simulation_id}", 3600)
+    await redis_client.close()
+    
+    change.simulation_performed = True
+    change.simulation_results = {
+        "simulation_id": simulation_id,
+        "status": "started",
+        "started_at": datetime.utcnow().isoformat(),
+    }
+    
+    await db.commit()
+    
+    await dependencies.audit_log(
+        action="change_record.simulate",
+        resource_type="change_record",
+        resource_id=str(change.id),
+        resource_name=change.change_number,
+        outcome="success",
+        details={"simulation_id": simulation_id},
+        current_user=current_user,
+        db=db,
+    )
+    
+    return schemas.ChangeSimulateResponse(
+        change_id=str(change.id),
+        simulation_id=simulation_id,
+        status="started",
+    )
+
+
+@router.get("/changes/{change_id}/simulation-results", response_model=schemas.ChangeRecordResponse)
+async def get_simulation_results(
+    change_id: str,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get simulation results for a change"""
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.models.models import ChangeRecord
+    
+    try:
+        change_uuid = UUID(change_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid change ID format")
+    
+    org_id = UUID(current_user.organization_id)
+    result = await db.execute(
+        select(ChangeRecord).where(
+            ChangeRecord.id == change_uuid,
+            ChangeRecord.organization_id == org_id,
+        )
+    )
+    change = result.scalar_one_or_none()
+    
+    if not change:
+        raise HTTPException(status_code=404, detail="Change record not found")
+    
+    return schemas.ChangeRecordResponse(
+        id=str(change.id),
+        organization_id=str(change.organization_id),
+        device_id=str(change.device_id),
+        change_number=change.change_number,
+        title=change.title,
+        description=change.description,
+        proposed_config=change.proposed_config,
+        current_config=change.current_config,
+        status=change.status,
+        risk_level=change.risk_level,
+        simulation_performed=change.simulation_performed,
+        simulation_results=change.simulation_results,
+        simulation_passed=change.simulation_passed,
+        external_ticket_id=change.external_ticket_id,
+        external_ticket_url=change.external_ticket_url,
+        ticket_system=change.ticket_system,
+        created_at=change.created_at,
+        updated_at=change.updated_at,
+    )
 
 
 # =============================================================================

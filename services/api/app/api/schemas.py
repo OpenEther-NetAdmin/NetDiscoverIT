@@ -541,3 +541,121 @@ class IntegrationConfigTestResponse(BaseModel):
     success: bool
     message: str
     details: dict | None = None
+
+
+class ChangeRecordCreate(BaseModel):
+    """Change record creation request"""
+    title: str
+    description: str | None = None
+    change_type: str
+    risk_level: str = "medium"
+    affected_devices: list[str] = []
+    affected_compliance_scopes: list[str] = []
+    scheduled_window_start: datetime | None = None
+    scheduled_window_end: datetime | None = None
+    compliance_justification: str | None = None
+
+
+class ChangeRecordUpdate(BaseModel):
+    """Change record update request"""
+    title: str | None = None
+    description: str | None = None
+    change_type: str | None = None
+    risk_level: str | None = None
+    affected_devices: list[str] | None = None
+    affected_compliance_scopes: list[str] | None = None
+    scheduled_window_start: datetime | None = None
+    scheduled_window_end: datetime | None = None
+    compliance_justification: str | None = None
+
+
+class ChangeRecordResponse(BaseModel):
+    """Change record response"""
+    id: str
+    organization_id: str
+    change_number: str
+    status: str
+    change_type: str | None = None
+    title: str
+    description: str | None = None
+    risk_level: str
+    compliance_justification: str | None = None
+    affected_devices: list[str]
+    affected_compliance_scopes: list[str]
+    requested_by: str | None = None
+    requested_at: datetime | None = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    approval_notes: str | None = None
+    proposed_change_hash: str | None = None
+    pre_change_hash: str | None = None
+    post_change_hash: str | None = None
+    simulation_performed: bool = False
+    simulation_results: dict | None = None
+    simulation_passed: bool | None = None
+    implemented_by: str | None = None
+    implemented_at: datetime | None = None
+    implementation_evidence: dict | None = None
+    verification_results: dict | None = None
+    verification_passed: bool | None = None
+    rollback_performed: bool = False
+    rollback_at: datetime | None = None
+    rollback_reason: str | None = None
+    external_ticket_id: str | None = None
+    external_ticket_url: str | None = None
+    ticket_system: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChangeRecordListResponse(BaseModel):
+    """Paginated change record list"""
+    items: list[ChangeRecordResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class ChangeProposeRequest(BaseModel):
+    """Request to propose a change for approval"""
+    proposed_change_hash: str
+
+
+class ChangeApproveRequest(BaseModel):
+    """Request to approve a change"""
+    approval_notes: str | None = None
+
+
+class ChangeImplementRequest(BaseModel):
+    """Request to implement an approved change"""
+    implementation_evidence: dict | None = None
+    post_change_hash: str
+
+
+class ChangeVerifyRequest(BaseModel):
+    """Request to verify a change"""
+    verification_results: dict | None = None
+
+
+class ChangeRollbackRequest(BaseModel):
+    """Request to rollback a change"""
+    rollback_reason: str
+
+
+class ChangeSimulateRequest(BaseModel):
+    """Request to trigger ContainerLab simulation"""
+    proposed_config: str
+
+
+class ChangeSimulateResponse(BaseModel):
+    """Response from simulation trigger"""
+    change_id: str
+    simulation_id: str
+    status: str
+
+
+class ChangeSyncTicketRequest(BaseModel):
+    """Request to sync change to external ticketing"""
+    ticket_system: str

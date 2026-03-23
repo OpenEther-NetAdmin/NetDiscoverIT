@@ -88,7 +88,7 @@ async def get_internal_api_key(x_internal_api_key: str = Header(...)) -> str:
 async def get_agent_auth(
     x_agent_key: str = Header(..., alias="X-Agent-Key"),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> "AgentAuth":
     """
     Validate agent API key from X-Agent-Key header.
     Returns agent context with org_id and agent_id.
@@ -104,14 +104,16 @@ async def get_agent_auth(
     result = await db.execute(select(LocalAgent).where(LocalAgent.is_active is True))
     agents = result.scalars().all()
 
+    from app.api.schemas import AgentAuth
+
     agent_context = None
     for agent in agents:
         if verify_password(x_agent_key, agent.api_key_hash):
-            agent_context = {
-                "agent_id": str(agent.id),
-                "organization_id": str(agent.organization_id),
-                "agent_name": agent.name,
-            }
+            agent_context = AgentAuth(
+                agent_id=str(agent.id),
+                organization_id=str(agent.organization_id),
+                agent_name=agent.name,
+            )
             break
 
     if not agent_context:

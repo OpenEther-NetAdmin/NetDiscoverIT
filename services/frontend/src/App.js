@@ -15,6 +15,7 @@ function App() {
       <Box flex="1" overflow="auto" bg="gray.50">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/portal" element={<Dashboard />} />
           <Route path="/devices" element={<Devices />} />
           <Route path="/discoveries" element={<Discoveries />} />
           <Route path="/path-visualizer" element={<PathVisualizer />} />

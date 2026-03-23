@@ -7,9 +7,12 @@ const Dashboard = () => {
     totalDevices: 0,
     activeDiscoveries: 0,
     issues: 0,
-    lastDiscovery: null
+    lastDiscovery: null,
+    totalAlerts: 0,
+    openAlerts: 0,
   });
   const [recentDevices, setRecentDevices] = useState([]);
+  const [recentDiscoveries, setRecentDiscoveries] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,23 +22,19 @@ const Dashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [devices, discoveries] = await Promise.all([
-        api.getDevices(),
-        api.getDiscoveries()
-      ]);
-      
-      const deviceList = devices || [];
-      const discoveryList = discoveries || [];
-      const activeDiscoveries = discoveryList.filter(d => d.status === 'running');
-      
+      const overview = await api.getPortalOverview();
+
       setStats({
-        totalDevices: deviceList.length,
-        activeDiscoveries: activeDiscoveries.length,
-        issues: 0,
-        lastDiscovery: discoveryList.length > 0 ? discoveryList[0].created_at : null
+        totalDevices: overview?.total_devices || 0,
+        activeDiscoveries: overview?.active_discoveries || 0,
+        issues: overview?.open_alerts || 0,
+        totalAlerts: overview?.total_alerts || 0,
+        openAlerts: overview?.open_alerts || 0,
+        lastDiscovery: overview?.recent_discoveries?.[0]?.created_at || null,
       });
-      
-      setRecentDevices(deviceList.slice(0, 5));
+
+      setRecentDevices(overview?.recent_devices || []);
+      setRecentDiscoveries(overview?.recent_discoveries || []);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -82,9 +81,9 @@ const Dashboard = () => {
         <Card>
           <CardBody>
             <Stat>
-              <StatLabel>Issues</StatLabel>
-              <StatNumber color="orange.500">{stats.issues}</StatNumber>
-              <StatHelpText>Requires attention</StatHelpText>
+              <StatLabel>Open Alerts</StatLabel>
+              <StatNumber color="orange.500">{stats.openAlerts}</StatNumber>
+              <StatHelpText>{stats.totalAlerts} total alerts</StatHelpText>
             </Stat>
           </CardBody>
         </Card>
@@ -136,6 +135,40 @@ const Dashboard = () => {
           ) : (
             <Box p={4} textAlign="center" color="gray.500">
               No devices found. Run a discovery to populate the inventory.
+            </Box>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card mt={6}>
+        <CardHeader>
+          <Heading size="md">Recent Discoveries</Heading>
+        </CardHeader>
+        <CardBody>
+          {recentDiscoveries.length > 0 ? (
+            <Table variant="simple" size="sm">
+              <Thead>
+                <Tr>
+                  <Th>Name</Th>
+                  <Th>Type</Th>
+                  <Th>Status</Th>
+                  <Th>Started</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {recentDiscoveries.map((discovery) => (
+                  <Tr key={discovery.id}>
+                    <Td fontWeight="medium">{discovery.name}</Td>
+                    <Td textTransform="capitalize">{discovery.discovery_type}</Td>
+                    <Td>{discovery.status}</Td>
+                    <Td>{discovery.created_at ? new Date(discovery.created_at).toLocaleString() : 'N/A'}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          ) : (
+            <Box p={4} textAlign="center" color="gray.500">
+              No discoveries found.
             </Box>
           )}
         </CardBody>

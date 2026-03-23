@@ -2,7 +2,7 @@
 API Routes
 """
 
-from uuid import UUID
+from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
 from typing import List, Optional
 from sqlalchemy import select
@@ -35,6 +35,87 @@ router = APIRouter()
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@router.get("/portal/overview", response_model=schemas.PortalOverview)
+async def portal_overview(
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return MSP portal summary metrics for the current organization"""
+    from app.models.models import AlertEvent, Discovery
+
+    org_id = UUID(current_user.organization_id)
+
+    total_devices_result = await db.execute(
+        select(Device.id).where(Device.organization_id == org_id)
+    )
+    total_devices = len(total_devices_result.scalars().all())
+
+    active_discoveries_result = await db.execute(
+        select(Discovery).where(
+            Discovery.organization_id == org_id,
+            Discovery.status == "running",
+        )
+    )
+    active_discoveries = len(active_discoveries_result.scalars().all())
+
+    alerts_result = await db.execute(
+        select(AlertEvent).where(AlertEvent.organization_id == org_id)
+    )
+    alerts = alerts_result.scalars().all()
+    total_alerts = len(alerts)
+    open_alerts = len([alert for alert in alerts if alert.resolved_at is None])
+
+    recent_devices_result = await db.execute(
+        select(Device)
+        .where(Device.organization_id == org_id)
+        .order_by(Device.updated_at.desc())
+        .limit(5)
+    )
+    recent_devices = recent_devices_result.scalars().all()
+
+    recent_discoveries_result = await db.execute(
+        select(Discovery)
+        .where(Discovery.organization_id == org_id)
+        .order_by(Discovery.created_at.desc())
+        .limit(5)
+    )
+    recent_discoveries = recent_discoveries_result.scalars().all()
+
+    return schemas.PortalOverview(
+        total_devices=total_devices,
+        active_discoveries=active_discoveries,
+        total_alerts=total_alerts,
+        open_alerts=open_alerts,
+        recent_devices=[
+            schemas.Device(
+                id=str(device.id),
+                hostname=device.hostname,
+                management_ip=str(device.ip_address),
+                vendor=device.vendor,
+                device_type=device.device_type,
+                role=device.device_role,
+                organization_id=str(device.organization_id),
+                created_at=device.created_at,
+                updated_at=device.updated_at,
+            )
+            for device in recent_devices
+        ],
+        recent_discoveries=[
+            schemas.Discovery(
+                id=str(discovery.id),
+                organization_id=str(discovery.organization_id),
+                name=discovery.name,
+                discovery_type=discovery.discovery_type,
+                status=discovery.status,
+                device_count=discovery.device_count or 0,
+                created_at=discovery.created_at,
+                completed_at=discovery.completed_at,
+            )
+            for discovery in recent_discoveries
+        ],
+    )
 
 
 # =============================================================================
@@ -86,7 +167,7 @@ async def get_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific device"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         device_uuid = UUID(device_id)
@@ -185,7 +266,7 @@ async def update_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a device"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         device_uuid = UUID(device_id)
@@ -246,7 +327,7 @@ async def delete_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a device"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         device_uuid = UUID(device_id)
@@ -357,7 +438,7 @@ async def get_discovery(
     db: AsyncSession = Depends(get_db),
 ):
     """Get discovery status"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
 
     try:
@@ -426,7 +507,7 @@ async def list_agents(
     db: AsyncSession = Depends(get_db),
 ):
     """List all agents for user's organization"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
@@ -469,7 +550,7 @@ async def get_agent(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific agent"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
 
     try:
@@ -522,7 +603,7 @@ async def rotate_agent_key(
 ):
     """Rotate agent API key"""
     import secrets
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.core.security import hash_password
 
@@ -571,7 +652,7 @@ async def agent_heartbeat(
     db: AsyncSession = Depends(get_db),
 ):
     """Agent heartbeat - updates last_seen, agent_version, capabilities"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from datetime import datetime, timezone
 
@@ -626,7 +707,7 @@ async def upload_agent_data(
     Accepts device metadata collected by local agent.
     Creates/updates Device records in cloud PostgreSQL.
     """
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select, func
     from app.models.models import Device
     
@@ -710,7 +791,7 @@ async def trace_path(
     db: AsyncSession = Depends(get_db),
 ):
     """Trace path between two IPs"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.db.neo4j import get_neo4j_client
 
@@ -811,7 +892,7 @@ async def list_sites(
     db: AsyncSession = Depends(get_db),
 ):
     """List all sites for user's organization"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
@@ -851,7 +932,7 @@ async def get_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific site"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         site_uuid = UUID(site_id)
@@ -949,7 +1030,7 @@ async def update_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a site"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         site_uuid = UUID(site_id)
@@ -1005,7 +1086,7 @@ async def delete_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a site"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
 
     try:
         site_uuid = UUID(site_id)
@@ -1050,7 +1131,7 @@ async def list_alert_rules(
     db: AsyncSession = Depends(get_db),
 ):
     """List all alert rules for user's organization"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1098,7 +1179,7 @@ async def get_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific alert rule"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1211,7 +1292,7 @@ async def update_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an alert rule"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1272,7 +1353,7 @@ async def delete_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an alert rule"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1318,7 +1399,7 @@ async def list_alert_events(
     db: AsyncSession = Depends(get_db),
 ):
     """List all alert events for user's organization"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertEvent
 
@@ -1376,7 +1457,7 @@ async def get_alert_event(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific alert event"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertEvent
 
@@ -1432,7 +1513,7 @@ async def acknowledge_alert_event(
     db: AsyncSession = Depends(get_db),
 ):
     """Acknowledge an alert event"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import AlertEvent
     from datetime import datetime, timezone
@@ -1501,7 +1582,7 @@ async def list_integrations(
     db: AsyncSession = Depends(get_db),
 ):
     """List all integrations for users organization"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1546,7 +1627,7 @@ async def get_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific integration config"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1677,7 +1758,7 @@ async def update_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an integration config"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
     import json
@@ -1753,7 +1834,7 @@ async def delete_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an integration config"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1798,7 +1879,7 @@ async def test_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Test an integration configuration"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
     import json
@@ -2078,7 +2159,7 @@ async def list_change_records(
     db: AsyncSession = Depends(get_db),
 ):
     """List change records with optional filters"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select, func
     from app.models.models import ChangeRecord
     
@@ -2164,7 +2245,7 @@ async def get_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific change record"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
@@ -2233,7 +2314,7 @@ async def update_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a change record (draft/proposed status only)"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
@@ -2324,7 +2405,7 @@ async def delete_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a change record (draft status only)"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
@@ -2376,7 +2457,7 @@ async def propose_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Submit change for approval; capture proposed change hash"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
@@ -2458,7 +2539,7 @@ async def approve_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Approve a proposed change (requires admin role)"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
@@ -2540,7 +2621,7 @@ async def implement_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Implement an approved change"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
@@ -2610,7 +2691,7 @@ async def verify_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Verify a implemented change (requires admin role)"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
@@ -2682,7 +2763,7 @@ async def rollback_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Rollback a change (requires admin role)"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
@@ -2757,7 +2838,7 @@ async def sync_change_to_ticket(
     db: AsyncSession = Depends(get_db),
 ):
     """Sync change record to external ticketing system"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord, IntegrationConfig
@@ -2843,7 +2924,7 @@ async def change_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Webhook receiver for external ticketing system approval"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import IntegrationConfig, ChangeRecord
@@ -2919,14 +3000,14 @@ async def create_acl_snapshot(
     from app.models.models import Organization
 
     org_result = await db.execute(
-        select(Organization).where(Organization.id == agent.organization_id)
+        select(Organization).where(Organization.id == UUID(agent.organization_id))
     )
     organization = org_result.scalar_one_or_none()
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
 
     snapshot = ACLSnapshot(
-        organization_id=agent.organization_id,
+        organization_id=UUID(agent.organization_id),
         device_id=UUID(snapshot_data.device_id),
         content_type=snapshot_data.content_type,
         encrypted_blob=snapshot_data.encrypted_blob,
@@ -3149,7 +3230,7 @@ async def trigger_simulation(
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger ContainerLab simulation for a proposed change"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import ChangeRecord
     from datetime import datetime
@@ -3230,7 +3311,7 @@ async def get_simulation_results(
     db: AsyncSession = Depends(get_db),
 ):
     """Get simulation results for a change"""
-    from uuid import UUID
+    from uuid import UUID, uuid4
     from sqlalchemy import select
     from app.models.models import ChangeRecord
     

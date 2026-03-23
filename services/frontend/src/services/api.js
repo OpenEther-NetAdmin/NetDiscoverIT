@@ -170,6 +170,10 @@ class ApiService {
   getStats() {
     return this.request('/api/v1/stats');
   }
+
+  getPortalOverview() {
+    return this.request('/api/v1/portal/overview');
+  }
 }
 
 export const api = new ApiService();

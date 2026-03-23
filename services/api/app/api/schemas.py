@@ -2,6 +2,8 @@
 API Schemas
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
@@ -17,6 +19,14 @@ class User(BaseModel):
     role: str
     full_name: str | None = None
     is_active: bool = True
+
+
+class AgentAuth(BaseModel):
+    """Authenticated agent context"""
+
+    agent_id: str
+    organization_id: str
+    agent_name: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -106,6 +116,17 @@ class Device(DeviceBase):
 
     class Config:
         from_attributes = True
+
+
+class PortalOverview(BaseModel):
+    """MSP portal overview summary"""
+
+    total_devices: int = 0
+    active_discoveries: int = 0
+    total_alerts: int = 0
+    open_alerts: int = 0
+    recent_devices: list[Device] = []
+    recent_discoveries: list[Discovery] = []
 
 
 class DiscoveryStatus(str, Enum):

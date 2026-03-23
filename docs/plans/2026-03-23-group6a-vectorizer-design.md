@@ -77,8 +77,7 @@ Upgrade the local agent's vectorizer to use `sentence-transformers/all-mpnet-bas
 - Ensure deterministic serialization (sorted keys, consistent formatting)
 
 ### 2. API: schemas.py
-- Add `config: List[float]` to `VectorData` schema
-- Update `VectorDevice` to include the 4th vector
+- Add vector fields to `DeviceMetadataUpload` schema (role_vector, topology_vector, security_vector, config_vector)
 
 ### 3. API: routes.py
 - Update `upload_agent_data()` to accept and store vectors
@@ -108,7 +107,7 @@ Upgrade the local agent's vectorizer to use `sentence-transformers/all-mpnet-bas
 ## Dependencies
 
 - **Group 5 (TextFSM Normalization):** Must complete first — config_vector requires normalized config output
-- **sentence-transformers package:** Must be added to agent requirements
+- **sentence-transformers package:** Already installed (==3.3.1 in agent requirements.txt)
 
 ---
 

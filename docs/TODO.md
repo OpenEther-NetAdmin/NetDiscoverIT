@@ -43,8 +43,8 @@
 - [ ] Compliance report generation (PCI-DSS, HIPAA, SOX, ISO 27001)
 - [ ] External ticketing integration endpoints (ServiceNow, Jira, Slack)
 - [ ] Alert delivery workflows (AlertRule → AlertEvent → notify IntegrationConfig)
-- [ ] Change management workflow (ChangeRecord lifecycle + ContainerLab simulation)
-- [ ] ACL Compliance Vault endpoints (zero-knowledge encrypted storage)
+- [x] Change management workflow (ChangeRecord lifecycle + ContainerLab simulation)
+- [x] ACL Compliance Vault endpoints (zero-knowledge encrypted storage)
 - [ ] Export document generation (PDF, DOCX, Drawio, Visio) + MinIO/S3
 
 ### Frontend — Phase 2 Features

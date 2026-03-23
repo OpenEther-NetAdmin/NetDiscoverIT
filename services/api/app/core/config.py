@@ -88,5 +88,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated, no spaces
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
 
+    # Rate limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_WRITE: str = "60/minute"
+    RATE_LIMIT_READ: str = "200/minute"
+
 
 settings = Settings()

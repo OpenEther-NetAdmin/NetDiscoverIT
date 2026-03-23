@@ -519,3 +519,25 @@ class AlertEventResponse(AlertEventBase):
 class AlertEventAcknowledge(BaseModel):
     """Schema for acknowledging an alert event"""
     resolution_notes: str | None = None
+
+
+class IntegrationConfigUpdate(BaseModel):
+    """Integration config update request"""
+    name: str | None = None
+    base_url: str | None = None
+    config: dict | None = None
+    credentials: dict | None = None
+    webhook_secret: str | None = None
+    is_enabled: bool | None = None
+
+
+class IntegrationConfigTestRequest(BaseModel):
+    """Request to test an integration"""
+    test_message: str | None = "Test message from NetDiscoverIT"
+
+
+class IntegrationConfigTestResponse(BaseModel):
+    """Response from integration test"""
+    success: bool
+    message: str
+    details: dict | None = None

@@ -13,27 +13,29 @@
 ## Dependencies
 
 - **Group 5 (TextFSM Normalization):** Must be complete first — config_vector requires normalized config output
-- **sentence-transformers package:** Add to agent requirements.txt
+- **sentence-transformers package:** Already installed (==3.3.1 in requirements.txt)
 
 ---
 
-## Task 1: Add sentence-transformers to Agent Requirements
+## Task 1: Verify sentence-transformers in Agent Requirements
 
 **Files:**
-- Modify: `services/agent/requirements.txt`
+- Verify: `services/agent/requirements.txt`
 
-**Step 1: Add dependency**
+**Step 1: Verify dependency exists**
 
-Add to requirements.txt:
+Check that `sentence-transformers` is in requirements.txt:
 ```
-sentence-transformers>=2.2.0
+sentence-transformers==3.3.1
 ```
 
-**Step 2: Commit**
+This is already installed (==3.3.1, better than >=2.2.0). No changes needed.
+
+**Step 2: Commit (if any changes)**
 
 ```bash
 git add services/agent/requirements.txt
-git commit -m "deps: add sentence-transformers for vectorizer"
+git commit -m "deps: verify sentence-transformers for vectorizer"
 ```
 
 ---
@@ -345,7 +347,6 @@ class DeviceMetadataUpload(BaseModel):
     site_id: str | None = None
     metadata: dict = {}
     config_hash: str | None = None
-    raw_config: str | None = None
     config_collected_at: datetime | None = None
     # NEW: Vector fields
     role_vector: List[float] | None = None
@@ -462,7 +463,11 @@ class TestFullVectorizerPipeline:
     
     @pytest.fixture
     def sample_metadata(self):
-        """Sample metadata as would come from normalizer + sanitizer"""
+        """Sample metadata as would come from normalizer + sanitizer.
+
+        Note: IP addresses shown are illustrative. In production, these would be
+        tokenized by the sanitizer before reaching the vectorizer (e.g., <ip_address>).
+        """
         return {
             "hostname": "core-router-01",
             "vendor": "Cisco",
@@ -481,7 +486,7 @@ class TestFullVectorizerPipeline:
                     {"name": "Gi0/0", "ip": "10.0.0.1", "mask": "255.255.255.0"},
                     {"name": "Gi0/1", "ip": "10.0.1.1", "mask": "255.255.255.0"}
                 ],
-                "bgp": {"asn": 65001, "neighbors": ["10.0.0.2"]}
+                "bgp": {"asn": 65001, "neighbor_count": 1}  # Neighbor IPs stripped by sanitizer
             }
         }
     
@@ -552,7 +557,7 @@ git commit -m "chore: pass full test suite and lint"
 
 | Task | Files | Effort |
 |------|-------|--------|
-| 1. Add sentence-transformers | requirements.txt | 5 min |
+| 1. Verify sentence-transformers | requirements.txt | 2 min |
 | 2. Update vectorizer | vectorizer.py + tests | 1.5 hr |
 | 3. Update API schema | schemas.py | 15 min |
 | 4. Update upload endpoint | routes.py + tests | 1 hr |

@@ -165,18 +165,6 @@ class Discovery(DiscoveryBase):
         from_attributes = True
 
 
-class DeviceMetadataUpload(BaseModel):
-    """Device metadata from agent upload"""
-
-    device_id: str
-    hostname: str
-    management_ip: str
-    vendor: str
-    device_type: str
-    role: str
-    metadata: dict = {}
-
-
 class DeviceMetadata(BaseModel):
     """Schema for Device.metadata JSONB field validation"""
 
@@ -434,7 +422,6 @@ class DeviceMetadataUpload(BaseModel):
     site_id: str | None = None
     metadata: dict = {}
     config_hash: str | None = None
-    raw_config: str | None = None
     config_collected_at: datetime | None = None
 
 

@@ -758,12 +758,20 @@ async def upload_agent_data(
                     "vendor": device_data.vendor,
                     "model": device_data.model,
                     "os_version": device_data.os_version,
-                    "metadata": device_data.metadata,
+                    "meta": device_data.metadata,
                     "config_hash": device_data.config_hash,
                     "last_seen": func.now(),
                 }.items():
                     if value is not None:
                         setattr(existing, field, value)
+                if device_data.role_vector is not None:
+                    existing.role_vector = device_data.role_vector
+                if device_data.topology_vector is not None:
+                    existing.topology_vector = device_data.topology_vector
+                if device_data.security_vector is not None:
+                    existing.security_vector = device_data.security_vector
+                if device_data.config_vector is not None:
+                    existing.config_vector = device_data.config_vector
                 updated += 1
             else:
                 new_device = Device(
@@ -777,8 +785,12 @@ async def upload_agent_data(
                     vendor=device_data.vendor,
                     model=device_data.model,
                     os_version=device_data.os_version,
-                    metadata=device_data.metadata,
+                    meta=device_data.metadata,
                     config_hash=device_data.config_hash,
+                    role_vector=device_data.role_vector,
+                    topology_vector=device_data.topology_vector,
+                    security_vector=device_data.security_vector,
+                    config_vector=device_data.config_vector,
                     discovered_at=func.now(),
                     last_seen=func.now(),
                 )

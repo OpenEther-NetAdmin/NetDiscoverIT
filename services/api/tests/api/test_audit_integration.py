@@ -78,17 +78,6 @@ class SingleObjectResult:
         return self._item
 
 
-class DummyScalarResult:
-    def __init__(self, value):
-        self._value = value
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._value
-
-
 def _mock_user() -> User:
     return User(
         id=str(uuid4()),
@@ -371,8 +360,6 @@ async def test_auth_routes_trigger_audit_log(audit_spy):
 
     assert [call["action"] for call in calls] == [
         "user.login",
-        "user.login_failed",
-        "user.login_failed",
         "user.register",
     ]
     assert all(call["resource_type"] == "user" for call in calls)

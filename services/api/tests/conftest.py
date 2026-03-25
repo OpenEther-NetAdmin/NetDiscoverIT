@@ -30,7 +30,7 @@ def setup_test_data():
             """))
             await conn.execute(text(f"""
                 INSERT INTO users (id, organization_id, email, hashed_password, role)
-                VALUES ('{FIXTED_USER_ID}', '{FIXTED_ORG_ID}', 'test@example.com', 'hashed_password', 'admin')
+                VALUES ('{FIXTED_USER_ID}', '{FIXTED_ORG_ID}', 'test@example.com', '$2b$12$G3OWrzQS6SOkOYLsDmTsG.rlfCuXrxcT1/jJhzML6gVA7kzS4Ieuu', 'admin')
                 ON CONFLICT (id) DO NOTHING
             """))
             await conn.commit()

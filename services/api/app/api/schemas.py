@@ -412,6 +412,7 @@ class HeartbeatResponse(BaseModel):
 
 class DeviceMetadataUpload(BaseModel):
     """Single device metadata for batch upload"""
+
     hostname: str | None = None
     ip_address: str | None = None
     mac_address: str | None = None
@@ -431,12 +432,14 @@ class DeviceMetadataUpload(BaseModel):
 
 class AgentUploadRequest(BaseModel):
     """Batch upload request from agent"""
+
     devices: list[DeviceMetadataUpload]
     scan_id: str | None = None
 
 
 class AgentUploadResponse(BaseModel):
     """Upload response"""
+
     uploaded: int
     updated: int
     errors: list[str]
@@ -444,6 +447,7 @@ class AgentUploadResponse(BaseModel):
 
 class AlertRuleType(str, Enum):
     """Alert rule types"""
+
     CONFIG_DRIFT = "config_drift"
     NEW_DEVICE = "new_device"
     DEVICE_OFFLINE = "device_offline"
@@ -455,6 +459,7 @@ class AlertRuleType(str, Enum):
 
 class AlertSeverity(str, Enum):
     """Alert severity levels"""
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -464,6 +469,7 @@ class AlertSeverity(str, Enum):
 
 class AlertRuleBase(BaseModel):
     """Base alert rule schema"""
+
     name: str
     rule_type: AlertRuleType
     conditions: dict = {}
@@ -476,11 +482,13 @@ class AlertRuleBase(BaseModel):
 
 class AlertRuleCreate(AlertRuleBase):
     """Alert rule creation schema"""
+
     pass
 
 
 class AlertRuleUpdate(BaseModel):
     """Alert rule update schema"""
+
     name: str | None = None
     rule_type: AlertRuleType | None = None
     conditions: dict | None = None
@@ -493,6 +501,7 @@ class AlertRuleUpdate(BaseModel):
 
 class AlertRuleResponse(AlertRuleBase):
     """Alert rule response schema"""
+
     id: str
     organization_id: str
     created_by: str | None = None
@@ -505,6 +514,7 @@ class AlertRuleResponse(AlertRuleBase):
 
 class AlertEventBase(BaseModel):
     """Base alert event schema"""
+
     severity: AlertSeverity
     title: str
     details: dict = {}
@@ -512,6 +522,7 @@ class AlertEventBase(BaseModel):
 
 class AlertEventResponse(AlertEventBase):
     """Alert event response schema"""
+
     id: str
     organization_id: str
     rule_id: str
@@ -530,11 +541,13 @@ class AlertEventResponse(AlertEventBase):
 
 class AlertEventAcknowledge(BaseModel):
     """Schema for acknowledging an alert event"""
+
     resolution_notes: str | None = None
 
 
 class IntegrationConfigUpdate(BaseModel):
     """Integration config update request"""
+
     name: str | None = None
     base_url: str | None = None
     config: dict | None = None
@@ -545,11 +558,13 @@ class IntegrationConfigUpdate(BaseModel):
 
 class IntegrationConfigTestRequest(BaseModel):
     """Request to test an integration"""
+
     test_message: str | None = "Test message from NetDiscoverIT"
 
 
 class IntegrationConfigTestResponse(BaseModel):
     """Response from integration test"""
+
     success: bool
     message: str
     details: dict | None = None
@@ -557,6 +572,7 @@ class IntegrationConfigTestResponse(BaseModel):
 
 class ChangeRecordCreate(BaseModel):
     """Change record creation request"""
+
     title: str
     description: str | None = None
     change_type: str
@@ -570,6 +586,7 @@ class ChangeRecordCreate(BaseModel):
 
 class ChangeRecordUpdate(BaseModel):
     """Change record update request"""
+
     title: str | None = None
     description: str | None = None
     change_type: str | None = None
@@ -583,6 +600,7 @@ class ChangeRecordUpdate(BaseModel):
 
 class ChangeRecordResponse(BaseModel):
     """Change record response"""
+
     id: str
     organization_id: str
     change_number: str
@@ -624,6 +642,7 @@ class ChangeRecordResponse(BaseModel):
 
 class ChangeRecordListResponse(BaseModel):
     """Paginated change record list"""
+
     items: list[ChangeRecordResponse]
     total: int
     skip: int
@@ -632,37 +651,44 @@ class ChangeRecordListResponse(BaseModel):
 
 class ChangeProposeRequest(BaseModel):
     """Request to propose a change for approval"""
+
     proposed_change_hash: str
 
 
 class ChangeApproveRequest(BaseModel):
     """Request to approve a change"""
+
     approval_notes: str | None = None
 
 
 class ChangeImplementRequest(BaseModel):
     """Request to implement an approved change"""
+
     implementation_evidence: dict | None = None
     post_change_hash: str
 
 
 class ChangeVerifyRequest(BaseModel):
     """Request to verify a change"""
+
     verification_results: dict | None = None
 
 
 class ChangeRollbackRequest(BaseModel):
     """Request to rollback a change"""
+
     rollback_reason: str
 
 
 class ChangeSimulateRequest(BaseModel):
     """Request to trigger ContainerLab simulation"""
+
     proposed_config: str
 
 
 class ChangeSimulateResponse(BaseModel):
     """Response from simulation trigger"""
+
     change_id: str
     simulation_id: str
     status: str
@@ -670,11 +696,13 @@ class ChangeSimulateResponse(BaseModel):
 
 class ChangeSyncTicketRequest(BaseModel):
     """Request to sync change to external ticketing"""
+
     ticket_system: str
 
 
 class ACLSnapshotCreate(BaseModel):
     """ACL snapshot creation request (agent-authenticated)"""
+
     device_id: str
     content_type: str
     encrypted_blob: str
@@ -688,11 +716,13 @@ class ACLSnapshotCreate(BaseModel):
 
 class ACLSnapshotUpdate(BaseModel):
     """ACL snapshot update request"""
+
     compliance_scope: list[str] | None = None
 
 
 class ACLSnapshotResponse(BaseModel):
     """ACL snapshot response"""
+
     id: str
     organization_id: str
     device_id: str
@@ -714,6 +744,7 @@ class ACLSnapshotResponse(BaseModel):
 
 class ACLSnapshotListResponse(BaseModel):
     """Paginated ACL snapshot list"""
+
     items: list[ACLSnapshotResponse]
     total: int
     skip: int

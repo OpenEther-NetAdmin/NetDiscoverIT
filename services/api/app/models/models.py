@@ -23,15 +23,10 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB, INET, MACADDR
 from sqlalchemy.orm import relationship, DeclarativeBase
 from pgvector.sqlalchemy import Vector
 
-print("models.py: starting")
-print("models.py: imports ok")
-
 
 class Base(DeclarativeBase):
     pass
 
-
-print("models.py: Base ok")
 
 # ---------------------------------------------------------------------------
 # Fernet-based encrypted text column

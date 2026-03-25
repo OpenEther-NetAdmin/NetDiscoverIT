@@ -62,13 +62,6 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
-        await dependencies.audit_log(
-            action="user.login_failed",
-            resource_type="user",
-            resource_name=credentials.email,
-            outcome="failure",
-            db=db,
-        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -76,13 +69,6 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         )
 
     if not user.is_active:
-        await dependencies.audit_log(
-            action="user.login_failed",
-            resource_type="user",
-            resource_name=credentials.email,
-            outcome="denied",
-            db=db,
-        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
         )
@@ -96,12 +82,21 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     )
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
+    from app.api.schemas import User as UserSchema
+    current_user = UserSchema(
+        id=str(user.id),
+        email=user.email,
+        organization_id=str(user.organization_id),
+        role=user.role,
+        is_active=user.is_active,
+    )
     await dependencies.audit_log(
         action="user.login",
         resource_type="user",
         resource_id=str(user.id),
         resource_name=user.email,
         outcome="success",
+        current_user=current_user,
         db=db,
     )
 

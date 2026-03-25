@@ -2,8 +2,15 @@
 API Routes
 """
 
-from uuid import UUID, uuid4
-from fastapi import APIRouter, HTTPException, Depends, Request, WebSocket, WebSocketDisconnect
+from uuid import UUID
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Depends,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +31,7 @@ def get_rate_limit(request: Request) -> str:
     if request.method in ["POST", "PATCH", "DELETE", "PUT"]:
         return settings.RATE_LIMIT_WRITE
     return settings.RATE_LIMIT_READ
+
 
 router = APIRouter()
 
@@ -195,7 +203,7 @@ async def get_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific device"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         device_uuid = UUID(device_id)
@@ -228,8 +236,6 @@ async def get_device(
     )
 
     return _device_response(device)
-
-
 
 
 @router.post("/devices", response_model=schemas.Device, status_code=201)
@@ -278,7 +284,7 @@ async def update_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a device"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         device_uuid = UUID(device_id)
@@ -343,7 +349,7 @@ async def delete_device(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a device"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         device_uuid = UUID(device_id)
@@ -388,7 +394,6 @@ async def trigger_discovery(
 ):
     """Trigger a new discovery"""
     from uuid import UUID, uuid4
-    from datetime import datetime, timezone
     import json
     import redis
 
@@ -423,6 +428,7 @@ async def trigger_discovery(
         redis_client.close()
     except Exception as e:
         import logging
+
         logging.warning(f"Failed to queue discovery job: {e}")
 
     await dependencies.audit_log(
@@ -454,7 +460,7 @@ async def get_discovery(
     db: AsyncSession = Depends(get_db),
 ):
     """Get discovery status"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
 
     try:
@@ -489,7 +495,9 @@ async def get_discovery(
         name=discovery.name,
         discovery_type=discovery.discovery_type or "full",
         status=discovery.status,
-        device_count=discovery.results.get("device_count", 0) if discovery.results else 0,
+        device_count=(
+            discovery.results.get("device_count", 0) if discovery.results else 0
+        ),
         created_at=discovery.created_at,
         completed_at=discovery.completed_at,
     )
@@ -523,7 +531,7 @@ async def list_agents(
     db: AsyncSession = Depends(get_db),
 ):
     """List all agents for user's organization"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
@@ -566,7 +574,7 @@ async def get_agent(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific agent"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
 
     try:
@@ -619,7 +627,7 @@ async def rotate_agent_key(
 ):
     """Rotate agent API key"""
     import secrets
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.core.security import hash_password
 
@@ -668,7 +676,7 @@ async def agent_heartbeat(
     db: AsyncSession = Depends(get_db),
 ):
     """Agent heartbeat - updates last_seen, agent_version, capabilities"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from datetime import datetime, timezone
 
@@ -719,25 +727,20 @@ async def upload_agent_data(
 ):
     """
     Upload device metadata batches from agent.
-    
+
     Accepts device metadata collected by local agent.
     Creates/updates Device records in cloud PostgreSQL.
     """
     from uuid import UUID, uuid4
     from sqlalchemy import select, func
     from app.models.models import Device
-    
-    try:
-        agent_uuid = UUID(agent_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid agent_id format")
-    
+
     org_id = UUID(agent_auth["organization_id"])
-    
+
     uploaded = 0
     updated = 0
     errors = []
-    
+
     for device_data in request.devices:
         try:
             existing = None
@@ -745,11 +748,11 @@ async def upload_agent_data(
                 result = await db.execute(
                     select(Device).where(
                         Device.organization_id == org_id,
-                        Device.ip_address == device_data.ip_address
+                        Device.ip_address == device_data.ip_address,
                     )
                 )
                 existing = result.scalar_one_or_none()
-            
+
             if existing:
                 for field, value in {
                     "hostname": device_data.hostname,
@@ -796,12 +799,14 @@ async def upload_agent_data(
                 )
                 db.add(new_device)
                 uploaded += 1
-            
+
         except Exception as e:
-            errors.append(f"Device {device_data.hostname or device_data.ip_address}: {str(e)}")
-    
+            errors.append(
+                f"Device {device_data.hostname or device_data.ip_address}: {str(e)}"
+            )
+
     await db.commit()
-    
+
     return schemas.AgentUploadResponse(
         uploaded=uploaded,
         updated=updated,
@@ -819,7 +824,7 @@ async def trace_path(
     db: AsyncSession = Depends(get_db),
 ):
     """Trace path between two IPs"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.db.neo4j import get_neo4j_client
 
@@ -847,7 +852,12 @@ async def trace_path(
             hops=[],
             summary={"error": "Source or destination device not found"},
             analysis={},
-            issues=[{"type": "device_not_found", "message": "One or both devices not found in database"}],
+            issues=[
+                {
+                    "type": "device_not_found",
+                    "message": "One or both devices not found in database",
+                }
+            ],
         )
 
     try:
@@ -862,7 +872,12 @@ async def trace_path(
                 hops=[],
                 summary={"message": "No path found between devices"},
                 analysis={},
-                issues=[{"type": "no_path", "message": "No connectivity path found in topology"}],
+                issues=[
+                    {
+                        "type": "no_path",
+                        "message": "No connectivity path found in topology",
+                    }
+                ],
             )
 
         hops = []
@@ -870,7 +885,10 @@ async def trace_path(
             hops.append(
                 schemas.PathHop(
                     hop=i + 1,
-                    device={"hostname": node.get("hostname"), "ip_address": node.get("ip_address")},
+                    device={
+                        "hostname": node.get("hostname"),
+                        "ip_address": node.get("ip_address"),
+                    },
                     interface={"name": "unknown"},
                     egress={"name": "unknown"},
                 )
@@ -899,6 +917,7 @@ async def trace_path(
 
     except Exception as e:
         import logging
+
         logging.error(f"Path trace error: {e}")
         return schemas.PathResult(
             path_found=False,
@@ -920,7 +939,7 @@ async def list_sites(
     db: AsyncSession = Depends(get_db),
 ):
     """List all sites for user's organization"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
@@ -960,7 +979,7 @@ async def get_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific site"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         site_uuid = UUID(site_id)
@@ -1040,7 +1059,7 @@ async def update_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a site"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         site_uuid = UUID(site_id)
@@ -1089,7 +1108,7 @@ async def delete_site(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a site"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
 
     try:
         site_uuid = UUID(site_id)
@@ -1134,7 +1153,7 @@ async def list_alert_rules(
     db: AsyncSession = Depends(get_db),
 ):
     """List all alert rules for user's organization"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1182,7 +1201,7 @@ async def get_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific alert rule"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1237,7 +1256,6 @@ async def create_alert_rule(
 ):
     """Create a new alert rule"""
     from uuid import UUID, uuid4
-    from sqlalchemy import select
     from app.models.models import AlertRule
 
     org_id = UUID(current_user.organization_id)
@@ -1295,7 +1313,7 @@ async def update_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an alert rule"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1356,7 +1374,7 @@ async def delete_alert_rule(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an alert rule"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertRule
 
@@ -1402,7 +1420,7 @@ async def list_alert_events(
     db: AsyncSession = Depends(get_db),
 ):
     """List all alert events for user's organization"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertEvent
 
@@ -1460,7 +1478,7 @@ async def get_alert_event(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific alert event"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertEvent
 
@@ -1508,7 +1526,9 @@ async def get_alert_event(
     )
 
 
-@router.post("/alerts/events/{event_id}/acknowledge", response_model=schemas.AlertEventResponse)
+@router.post(
+    "/alerts/events/{event_id}/acknowledge", response_model=schemas.AlertEventResponse
+)
 async def acknowledge_alert_event(
     event_id: str,
     acknowledge: schemas.AlertEventAcknowledge,
@@ -1516,7 +1536,7 @@ async def acknowledge_alert_event(
     db: AsyncSession = Depends(get_db),
 ):
     """Acknowledge an alert event"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import AlertEvent
     from datetime import datetime, timezone
@@ -1585,7 +1605,7 @@ async def list_integrations(
     db: AsyncSession = Depends(get_db),
 ):
     """List all integrations for users organization"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1622,7 +1642,9 @@ async def list_integrations(
     ]
 
 
-@router.get("/integrations/{integration_id}", response_model=schemas.IntegrationConfigResponse)
+@router.get(
+    "/integrations/{integration_id}", response_model=schemas.IntegrationConfigResponse
+)
 async def get_integration(
     request: Request,
     integration_id: str,
@@ -1630,7 +1652,7 @@ async def get_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific integration config"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1673,7 +1695,9 @@ async def get_integration(
     )
 
 
-@router.post("/integrations", response_model=schemas.IntegrationConfigResponse, status_code=201)
+@router.post(
+    "/integrations", response_model=schemas.IntegrationConfigResponse, status_code=201
+)
 async def create_integration(
     request: Request,
     integration: schemas.IntegrationConfigCreate,
@@ -1682,7 +1706,6 @@ async def create_integration(
 ):
     """Create a new integration config"""
     from uuid import UUID, uuid4
-    from sqlalchemy import select
     from app.models.models import IntegrationConfig
     import json
 
@@ -1696,13 +1719,16 @@ async def create_integration(
     )
     existing = result.scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=400, detail="Integration with this name already exists")
+        raise HTTPException(
+            status_code=400, detail="Integration with this name already exists"
+        )
 
     credentials_json = json.dumps(integration.credentials)
     encrypted_creds = None
     if integration.credentials:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         encrypted_creds = fernet.encrypt(credentials_json.encode()).decode()
 
@@ -1710,8 +1736,11 @@ async def create_integration(
     if integration.webhook_secret:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
-        encrypted_webhook_secret = fernet.encrypt(integration.webhook_secret.encode()).decode()
+        encrypted_webhook_secret = fernet.encrypt(
+            integration.webhook_secret.encode()
+        ).decode()
 
     integration_obj = IntegrationConfig(
         id=uuid4(),
@@ -1752,7 +1781,9 @@ async def create_integration(
     )
 
 
-@router.patch("/integrations/{integration_id}", response_model=schemas.IntegrationConfigResponse)
+@router.patch(
+    "/integrations/{integration_id}", response_model=schemas.IntegrationConfigResponse
+)
 async def update_integration(
     request: Request,
     integration_id: str,
@@ -1761,7 +1792,7 @@ async def update_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an integration config"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
     import json
@@ -1787,16 +1818,22 @@ async def update_integration(
     if "credentials" in update_data and update_data["credentials"]:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         credentials_json = json.dumps(update_data["credentials"])
-        integration.encrypted_credentials = fernet.encrypt(credentials_json.encode()).decode()
+        integration.encrypted_credentials = fernet.encrypt(
+            credentials_json.encode()
+        ).decode()
         del update_data["credentials"]
 
     if "webhook_secret" in update_data and update_data["webhook_secret"]:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
-        integration.webhook_secret = fernet.encrypt(update_data["webhook_secret"].encode()).decode()
+        integration.webhook_secret = fernet.encrypt(
+            update_data["webhook_secret"].encode()
+        ).decode()
         del update_data["webhook_secret"]
 
     for field, value in update_data.items():
@@ -1837,7 +1874,7 @@ async def delete_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an integration config"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import IntegrationConfig
 
@@ -1873,7 +1910,10 @@ async def delete_integration(
     return None
 
 
-@router.post("/integrations/{integration_id}/test", response_model=schemas.IntegrationConfigTestResponse)
+@router.post(
+    "/integrations/{integration_id}/test",
+    response_model=schemas.IntegrationConfigTestResponse,
+)
 async def test_integration(
     request: Request,
     integration_id: str,
@@ -1882,11 +1922,9 @@ async def test_integration(
     db: AsyncSession = Depends(get_db),
 ):
     """Test an integration configuration"""
-    from uuid import UUID, uuid4
-    from sqlalchemy import select
+    from uuid import UUID
     from app.models.models import IntegrationConfig
     import json
-    import httpx
 
     try:
         integration_uuid = UUID(integration_id)
@@ -1908,9 +1946,12 @@ async def test_integration(
     if integration.encrypted_credentials:
         from cryptography.fernet import Fernet
         from app.core.config import settings
+
         fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
         try:
-            creds_decrypted = fernet.decrypt(integration.encrypted_credentials.encode()).decode()
+            creds_decrypted = fernet.decrypt(
+                integration.encrypted_credentials.encode()
+            ).decode()
             credentials = json.loads(creds_decrypted)
         except Exception as e:
             return schemas.IntegrationConfigTestResponse(
@@ -1919,7 +1960,9 @@ async def test_integration(
                 details={"error": str(e)},
             )
 
-    test_result = await _test_integration(integration, credentials, test_request.test_message)
+    test_result = await _test_integration(
+        integration, credentials, test_request.test_message
+    )
 
     await dependencies.audit_log(
         action="integration_config.test",
@@ -1948,8 +1991,11 @@ async def _test_integration(integration, credentials, test_message):
     try:
         if integration_type == "slack":
             if not credentials or "webhook_url" not in credentials:
-                return {"success": False, "message": "Missing webhook_url in credentials"}
-            
+                return {
+                    "success": False,
+                    "message": "Missing webhook_url in credentials",
+                }
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     credentials["webhook_url"],
@@ -1958,12 +2004,18 @@ async def _test_integration(integration, credentials, test_message):
                 )
                 if response.status_code == 200:
                     return {"success": True, "message": "Slack webhook test successful"}
-                return {"success": False, "message": f"Slack webhook failed: {response.status_code}"}
+                return {
+                    "success": False,
+                    "message": f"Slack webhook failed: {response.status_code}",
+                }
 
         elif integration_type == "teams":
             if not credentials or "webhook_url" not in credentials:
-                return {"success": False, "message": "Missing webhook_url in credentials"}
-            
+                return {
+                    "success": False,
+                    "message": "Missing webhook_url in credentials",
+                }
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     credentials["webhook_url"],
@@ -1972,14 +2024,20 @@ async def _test_integration(integration, credentials, test_message):
                 )
                 if response.status_code == 200:
                     return {"success": True, "message": "Teams webhook test successful"}
-                return {"success": False, "message": f"Teams webhook failed: {response.status_code}"}
+                return {
+                    "success": False,
+                    "message": f"Teams webhook failed: {response.status_code}",
+                }
 
         elif integration_type == "servicenow":
             if not credentials or not base_url:
                 return {"success": False, "message": "Missing credentials or base_url"}
-            
+
             async with httpx.AsyncClient() as client:
-                auth = (credentials.get("username", ""), credentials.get("password", ""))
+                auth = (
+                    credentials.get("username", ""),
+                    credentials.get("password", ""),
+                )
                 response = await client.get(
                     f"{base_url}/api/now/table/change_request",
                     auth=auth,
@@ -1987,16 +2045,22 @@ async def _test_integration(integration, credentials, test_message):
                     timeout=10,
                 )
                 if response.status_code == 200:
-                    return {"success": True, "message": "ServiceNow API test successful"}
-                return {"success": False, "message": f"ServiceNow API failed: {response.status_code}"}
+                    return {
+                        "success": True,
+                        "message": "ServiceNow API test successful",
+                    }
+                return {
+                    "success": False,
+                    "message": f"ServiceNow API failed: {response.status_code}",
+                }
 
         elif integration_type == "jira":
             if not credentials or not base_url:
                 return {"success": False, "message": "Missing credentials or base_url"}
-            
+
             async with httpx.AsyncClient() as client:
                 headers = {
-                    "Authorization": f"Basic " + credentials.get("api_token", ""),
+                    "Authorization": "Basic " + credentials.get("api_token", ""),
                     "Content-Type": "application/json",
                 }
                 response = await client.get(
@@ -2006,12 +2070,18 @@ async def _test_integration(integration, credentials, test_message):
                 )
                 if response.status_code == 200:
                     return {"success": True, "message": "JIRA API test successful"}
-                return {"success": False, "message": f"JIRA API failed: {response.status_code}"}
+                return {
+                    "success": False,
+                    "message": f"JIRA API failed: {response.status_code}",
+                }
 
         elif integration_type == "pagerduty":
             if not credentials or "routing_key" not in credentials:
-                return {"success": False, "message": "Missing routing_key in credentials"}
-            
+                return {
+                    "success": False,
+                    "message": "Missing routing_key in credentials",
+                }
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "https://events.pagerduty.net/v2/enqueue",
@@ -2027,10 +2097,16 @@ async def _test_integration(integration, credentials, test_message):
                 )
                 if response.status_code in (200, 202):
                     return {"success": True, "message": "PagerDuty test successful"}
-                return {"success": False, "message": f"PagerDuty failed: {response.status_code}"}
+                return {
+                    "success": False,
+                    "message": f"PagerDuty failed: {response.status_code}",
+                }
 
         else:
-            return {"success": False, "message": f"Unsupported integration type: {integration_type}"}
+            return {
+                "success": False,
+                "message": f"Unsupported integration type: {integration_type}",
+            }
 
     except Exception as e:
         return {"success": False, "message": f"Test failed: {str(e)}"}
@@ -2040,22 +2116,23 @@ async def _test_integration(integration, credentials, test_message):
 # CHANGE RECORDS
 # =============================================================================
 
+
 async def generate_change_number(db: AsyncSession) -> str:
     """Generate unique change number: CHG-YYYY-NNNN"""
     from datetime import datetime
     from sqlalchemy import func, select
     from app.models.models import ChangeRecord
-    
+
     year = datetime.utcnow().year
     prefix = f"CHG-{year}-"
-    
+
     result = await db.execute(
         select(func.count())
         .select_from(ChangeRecord)
         .where(ChangeRecord.change_number.like(f"{prefix}%"))
     )
     count = result.scalar() or 0
-    
+
     return f"{prefix}{count + 1:04d}"
 
 
@@ -2092,10 +2169,10 @@ async def create_change_record(
     """Create a new change record (status=draft)"""
     from uuid import UUID, uuid4
     from app.models.models import ChangeRecord
-    
+
     org_id = UUID(current_user.organization_id)
     change_number = await generate_change_number(db)
-    
+
     change_record = ChangeRecord(
         id=uuid4(),
         organization_id=org_id,
@@ -2112,11 +2189,11 @@ async def create_change_record(
         compliance_justification=change.compliance_justification,
         requested_by=UUID(current_user.id),
     )
-    
+
     db.add(change_record)
     await db.commit()
     await db.refresh(change_record)
-    
+
     await dependencies.audit_log(
         action="change_record.create",
         resource_type="change_record",
@@ -2126,7 +2203,7 @@ async def create_change_record(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change_record.id),
         organization_id=str(change_record.organization_id),
@@ -2139,7 +2216,9 @@ async def create_change_record(
         compliance_justification=change_record.compliance_justification,
         affected_devices=change_record.affected_devices or [],
         affected_compliance_scopes=change_record.affected_compliance_scopes or [],
-        requested_by=str(change_record.requested_by) if change_record.requested_by else None,
+        requested_by=(
+            str(change_record.requested_by) if change_record.requested_by else None
+        ),
         requested_at=change_record.requested_at,
         simulation_performed=change_record.simulation_performed,
         simulation_results=change_record.simulation_results,
@@ -2162,14 +2241,14 @@ async def list_change_records(
     db: AsyncSession = Depends(get_db),
 ):
     """List change records with optional filters"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select, func
     from app.models.models import ChangeRecord
-    
+
     org_id = UUID(current_user.organization_id)
-    
+
     query = select(ChangeRecord).where(ChangeRecord.organization_id == org_id)
-    
+
     if status:
         query = query.where(ChangeRecord.status == status)
     if risk_level:
@@ -2177,23 +2256,27 @@ async def list_change_records(
     if device_id:
         query = query.where(ChangeRecord.affected_devices.contains([device_id]))
     if compliance_scope:
-        query = query.where(ChangeRecord.affected_compliance_scopes.contains([compliance_scope]))
-    
-    count_query = select(func.count()).select_from(ChangeRecord).where(
-        ChangeRecord.organization_id == org_id
+        query = query.where(
+            ChangeRecord.affected_compliance_scopes.contains([compliance_scope])
+        )
+
+    count_query = (
+        select(func.count())
+        .select_from(ChangeRecord)
+        .where(ChangeRecord.organization_id == org_id)
     )
     if status:
         count_query = count_query.where(ChangeRecord.status == status)
     if risk_level:
         count_query = count_query.where(ChangeRecord.risk_level == risk_level)
-    
+
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
-    
+
     query = query.offset(skip).limit(limit).order_by(ChangeRecord.requested_at.desc())
     result = await db.execute(query)
     changes = result.scalars().all()
-    
+
     return schemas.ChangeRecordListResponse(
         items=[
             schemas.ChangeRecordResponse(
@@ -2248,16 +2331,16 @@ async def get_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific change record"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2266,10 +2349,10 @@ async def get_change_record(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2317,16 +2400,16 @@ async def update_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a change record (draft/proposed status only)"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2335,23 +2418,22 @@ async def update_change_record(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if change.status not in ["draft", "proposed"]:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot update change in '{change.status}' status"
+            status_code=400, detail=f"Cannot update change in '{change.status}' status"
         )
-    
+
     update_data = change_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(change, field, value)
-    
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.update",
         resource_type="change_record",
@@ -2361,7 +2443,7 @@ async def update_change_record(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2408,16 +2490,16 @@ async def delete_change_record(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a change record (draft status only)"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2426,19 +2508,18 @@ async def delete_change_record(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if change.status != "draft":
         raise HTTPException(
-            status_code=400,
-            detail="Can only delete change records in draft status"
+            status_code=400, detail="Can only delete change records in draft status"
         )
-    
+
     await db.delete(change)
     await db.commit()
-    
+
     await dependencies.audit_log(
         action="change_record.delete",
         resource_type="change_record",
@@ -2448,11 +2529,13 @@ async def delete_change_record(
         current_user=current_user,
         db=db,
     )
-    
+
     return None
 
 
-@router.post("/changes/{change_id}/propose", response_model=schemas.ChangeRecordResponse)
+@router.post(
+    "/changes/{change_id}/propose", response_model=schemas.ChangeRecordResponse
+)
 async def propose_change(
     change_id: str,
     request: schemas.ChangeProposeRequest,
@@ -2460,17 +2543,14 @@ async def propose_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Submit change for approval; capture proposed change hash"""
-    from uuid import UUID, uuid4
-    from sqlalchemy import select
-    from fastapi import HTTPException
-    from datetime import datetime
+    from uuid import UUID
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2479,28 +2559,26 @@ async def propose_change(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if not can_transition(change.status, "proposed"):
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot propose change in '{change.status}' status"
+            status_code=400, detail=f"Cannot propose change in '{change.status}' status"
         )
-    
+
     if not change.affected_devices:
         raise HTTPException(
-            status_code=400,
-            detail="At least one affected device must be specified"
+            status_code=400, detail="At least one affected device must be specified"
         )
-    
+
     change.status = "proposed"
     change.proposed_change_hash = request.proposed_change_hash
-    
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.propose",
         resource_type="change_record",
@@ -2511,7 +2589,7 @@ async def propose_change(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2534,7 +2612,9 @@ async def propose_change(
     )
 
 
-@router.post("/changes/{change_id}/approve", response_model=schemas.ChangeRecordResponse)
+@router.post(
+    "/changes/{change_id}/approve", response_model=schemas.ChangeRecordResponse
+)
 async def approve_change(
     change_id: str,
     request: schemas.ChangeApproveRequest,
@@ -2542,23 +2622,22 @@ async def approve_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Approve a proposed change (requires admin role)"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
     from app.models.models import ChangeRecord
-    
+
     if current_user.role != "admin":
         raise HTTPException(
-            status_code=403,
-            detail="Only administrators can approve changes"
+            status_code=403, detail="Only administrators can approve changes"
         )
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2567,30 +2646,28 @@ async def approve_change(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if not can_transition(change.status, "approved"):
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot approve change in '{change.status}' status"
+            status_code=400, detail=f"Cannot approve change in '{change.status}' status"
         )
-    
+
     if change.simulation_performed and not change.simulation_passed:
         raise HTTPException(
-            status_code=400,
-            detail="Simulation must pass before approval"
+            status_code=400, detail="Simulation must pass before approval"
         )
-    
+
     change.status = "approved"
     change.approved_by = UUID(current_user.id)
     change.approved_at = datetime.utcnow()
     change.approval_notes = request.approval_notes
-    
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.approve",
         resource_type="change_record",
@@ -2601,7 +2678,7 @@ async def approve_change(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2616,7 +2693,9 @@ async def approve_change(
     )
 
 
-@router.post("/changes/{change_id}/implement", response_model=schemas.ChangeRecordResponse)
+@router.post(
+    "/changes/{change_id}/implement", response_model=schemas.ChangeRecordResponse
+)
 async def implement_change(
     change_id: str,
     request: schemas.ChangeImplementRequest,
@@ -2624,17 +2703,17 @@ async def implement_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Implement an approved change"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2643,25 +2722,25 @@ async def implement_change(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if not can_transition(change.status, "in_progress"):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot implement change in '{change.status}' status"
+            detail=f"Cannot implement change in '{change.status}' status",
         )
-    
+
     change.status = "in_progress"
     change.implemented_by = UUID(current_user.id)
     change.implemented_at = datetime.utcnow()
     change.implementation_evidence = request.implementation_evidence
     change.post_change_hash = request.post_change_hash
-    
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.implement",
         resource_type="change_record",
@@ -2671,7 +2750,7 @@ async def implement_change(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2694,23 +2773,19 @@ async def verify_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Verify a implemented change (requires admin role)"""
-    from uuid import UUID, uuid4
-    from sqlalchemy import select
-    from fastapi import HTTPException
-    from datetime import datetime
+    from uuid import UUID
     from app.models.models import ChangeRecord
-    
+
     if current_user.role != "admin":
         raise HTTPException(
-            status_code=403,
-            detail="Only administrators can verify changes"
+            status_code=403, detail="Only administrators can verify changes"
         )
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2719,23 +2794,26 @@ async def verify_change(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if change.status != "in_progress":
         raise HTTPException(
-            status_code=400,
-            detail="Can only verify changes in in_progress status"
+            status_code=400, detail="Can only verify changes in in_progress status"
         )
-    
+
     change.status = "completed"
     change.verification_results = request.verification_results
-    change.verification_passed = request.verification_results.get("passed", False) if request.verification_results else False
-    
+    change.verification_passed = (
+        request.verification_results.get("passed", False)
+        if request.verification_results
+        else False
+    )
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.verify",
         resource_type="change_record",
@@ -2745,7 +2823,7 @@ async def verify_change(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2758,7 +2836,9 @@ async def verify_change(
     )
 
 
-@router.post("/changes/{change_id}/rollback", response_model=schemas.ChangeRecordResponse)
+@router.post(
+    "/changes/{change_id}/rollback", response_model=schemas.ChangeRecordResponse
+)
 async def rollback_change(
     change_id: str,
     request: schemas.ChangeRollbackRequest,
@@ -2766,23 +2846,22 @@ async def rollback_change(
     db: AsyncSession = Depends(get_db),
 ):
     """Rollback a change (requires admin role)"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from datetime import datetime
     from app.models.models import ChangeRecord
-    
+
     if current_user.role != "admin":
         raise HTTPException(
-            status_code=403,
-            detail="Only administrators can rollback changes"
+            status_code=403, detail="Only administrators can rollback changes"
         )
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -2791,24 +2870,24 @@ async def rollback_change(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if not can_transition(change.status, "rolled_back"):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot rollback change in '{change.status}' status"
+            detail=f"Cannot rollback change in '{change.status}' status",
         )
-    
+
     change.status = "rolled_back"
     change.rollback_performed = True
     change.rollback_at = datetime.utcnow()
     change.rollback_reason = request.rollback_reason
-    
+
     await db.commit()
     await db.refresh(change)
-    
+
     await dependencies.audit_log(
         action="change_record.rollback",
         resource_type="change_record",
@@ -2819,7 +2898,7 @@ async def rollback_change(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2833,7 +2912,9 @@ async def rollback_change(
     )
 
 
-@router.post("/changes/{change_id}/sync-ticket", response_model=schemas.ChangeRecordResponse)
+@router.post(
+    "/changes/{change_id}/sync-ticket", response_model=schemas.ChangeRecordResponse
+)
 async def sync_change_to_ticket(
     change_id: str,
     request: schemas.ChangeSyncTicketRequest,
@@ -2841,19 +2922,19 @@ async def sync_change_to_ticket(
     db: AsyncSession = Depends(get_db),
 ):
     """Sync change record to external ticketing system"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import ChangeRecord, IntegrationConfig
     from app.services.ticket_sync import ticket_sync_service
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
-    
+
     result = await db.execute(
         select(ChangeRecord).where(
             ChangeRecord.id == change_uuid,
@@ -2861,25 +2942,25 @@ async def sync_change_to_ticket(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     integ_result = await db.execute(
         select(IntegrationConfig).where(
             IntegrationConfig.organization_id == org_id,
             IntegrationConfig.integration_type == request.ticket_system,
-            IntegrationConfig.is_enabled == True,
+            IntegrationConfig.is_enabled is True,
         )
     )
     integration = integ_result.scalar_one_or_none()
-    
+
     if not integration:
         raise HTTPException(
             status_code=404,
-            detail=f"No enabled {request.ticket_system} integration found"
+            detail=f"No enabled {request.ticket_system} integration found",
         )
-    
+
     try:
         if request.ticket_system == "servicenow":
             ticket_result = await ticket_sync_service.create_servicenow_ticket(
@@ -2892,22 +2973,23 @@ async def sync_change_to_ticket(
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported ticket system: {request.ticket_system}"
+                detail=f"Unsupported ticket system: {request.ticket_system}",
             )
-        
-        change.external_ticket_id = ticket_result.get("ticket_id") or ticket_result.get("ticket_key")
+
+        change.external_ticket_id = ticket_result.get("ticket_id") or ticket_result.get(
+            "ticket_key"
+        )
         change.external_ticket_url = ticket_result.get("ticket_url")
         change.ticket_system = request.ticket_system
-        
+
         await db.commit()
         await db.refresh(change)
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=502,
-            detail=f"Failed to create ticket: {str(e)}"
+            status_code=502, detail=f"Failed to create ticket: {str(e)}"
         )
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -2927,28 +3009,30 @@ async def change_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Webhook receiver for external ticketing system approval"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
     from app.models.models import IntegrationConfig, ChangeRecord
-    
+
     try:
         integ_uuid = UUID(integration_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid integration ID")
-    
+
     result = await db.execute(
         select(IntegrationConfig).where(IntegrationConfig.id == integ_uuid)
     )
     integration = result.scalar_one_or_none()
-    
+
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
-    
+
     if integration.integration_type == "servicenow":
-        change_request_id = payload.get("sys_id") or payload.get("change_request", {}).get("sys_id")
+        change_request_id = payload.get("sys_id") or payload.get(
+            "change_request", {}
+        ).get("sys_id")
         state = payload.get("state") or payload.get("change_request", {}).get("state")
-        
+
         if state in ["3", "approved"]:
             cr_result = await db.execute(
                 select(ChangeRecord).where(
@@ -2956,33 +3040,33 @@ async def change_webhook(
                 )
             )
             change = cr_result.scalar_one_or_none()
-            
+
             if change and change.status == "proposed":
                 from datetime import datetime
+
                 change.status = "approved"
                 change.approved_at = datetime.utcnow()
-                change.approval_notes = f"Auto-approved via ServiceNow webhook"
+                change.approval_notes = "Auto-approved via ServiceNow webhook"
                 await db.commit()
-                
+
     elif integration.integration_type == "jira":
         issue_key = payload.get("issue", {}).get("key")
         transition = payload.get("transition", {}).get("name", "").lower()
-        
+
         if "approve" in transition or "resolved" in transition:
             cr_result = await db.execute(
-                select(ChangeRecord).where(
-                    ChangeRecord.external_ticket_id == issue_key
-                )
+                select(ChangeRecord).where(ChangeRecord.external_ticket_id == issue_key)
             )
             change = cr_result.scalar_one_or_none()
-            
+
             if change and change.status == "proposed":
                 from datetime import datetime
+
                 change.status = "approved"
                 change.approved_at = datetime.utcnow()
-                change.approval_notes = f"Auto-approved via JIRA webhook"
+                change.approval_notes = "Auto-approved via JIRA webhook"
                 await db.commit()
-    
+
     return {"status": "received"}
 
 
@@ -3173,7 +3257,9 @@ async def delete_acl_snapshot(
     await db.commit()
 
 
-@router.patch("/acl-snapshots/{snapshot_id}", response_model=schemas.ACLSnapshotResponse)
+@router.patch(
+    "/acl-snapshots/{snapshot_id}", response_model=schemas.ACLSnapshotResponse
+)
 async def update_acl_snapshot(
     snapshot_id: str,
     snapshot_data: schemas.ACLSnapshotUpdate,
@@ -3225,7 +3311,9 @@ async def update_acl_snapshot(
 # =============================================================================
 # CHANGE SIMULATION (ContainerLab)
 # =============================================================================
-@router.post("/changes/{change_id}/simulate", response_model=schemas.ChangeSimulateResponse)
+@router.post(
+    "/changes/{change_id}/simulate", response_model=schemas.ChangeSimulateResponse
+)
 async def trigger_simulation(
     change_id: str,
     request: schemas.ChangeSimulateRequest,
@@ -3233,17 +3321,17 @@ async def trigger_simulation(
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger ContainerLab simulation for a proposed change"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import ChangeRecord
     from datetime import datetime
     from uuid import uuid4
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -3252,20 +3340,19 @@ async def trigger_simulation(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     if change.status != "proposed":
         raise HTTPException(
-            status_code=400,
-            detail="Can only simulate changes in proposed status"
+            status_code=400, detail="Can only simulate changes in proposed status"
         )
-    
+
     simulation_id = str(uuid4())
-    
-    import json
+
     import redis.asyncio as redis
+
     redis_client = redis.from_url(settings.REDIS_URL)
     await redis_client.hset(
         f"simulation:{simulation_id}",
@@ -3275,20 +3362,20 @@ async def trigger_simulation(
             "proposed_config": request.proposed_config,
             "status": "pending",
             "created_at": datetime.utcnow().isoformat(),
-        }
+        },
     )
     await redis_client.expire(f"simulation:{simulation_id}", 3600)
     await redis_client.close()
-    
+
     change.simulation_performed = True
     change.simulation_results = {
         "simulation_id": simulation_id,
         "status": "started",
         "started_at": datetime.utcnow().isoformat(),
     }
-    
+
     await db.commit()
-    
+
     await dependencies.audit_log(
         action="change_record.simulate",
         resource_type="change_record",
@@ -3299,7 +3386,7 @@ async def trigger_simulation(
         current_user=current_user,
         db=db,
     )
-    
+
     return schemas.ChangeSimulateResponse(
         change_id=str(change.id),
         simulation_id=simulation_id,
@@ -3307,22 +3394,25 @@ async def trigger_simulation(
     )
 
 
-@router.get("/changes/{change_id}/simulation-results", response_model=schemas.ChangeRecordResponse)
+@router.get(
+    "/changes/{change_id}/simulation-results",
+    response_model=schemas.ChangeRecordResponse,
+)
 async def get_simulation_results(
     change_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get simulation results for a change"""
-    from uuid import UUID, uuid4
+    from uuid import UUID
     from sqlalchemy import select
     from app.models.models import ChangeRecord
-    
+
     try:
         change_uuid = UUID(change_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid change ID format")
-    
+
     org_id = UUID(current_user.organization_id)
     result = await db.execute(
         select(ChangeRecord).where(
@@ -3331,10 +3421,10 @@ async def get_simulation_results(
         )
     )
     change = result.scalar_one_or_none()
-    
+
     if not change:
         raise HTTPException(status_code=404, detail="Change record not found")
-    
+
     return schemas.ChangeRecordResponse(
         id=str(change.id),
         organization_id=str(change.organization_id),
@@ -3364,9 +3454,9 @@ async def get_simulation_results(
 async def websocket_discovery_status(websocket: WebSocket, discovery_id: str):
     """
     WebSocket endpoint for real-time discovery status updates.
-    
+
     Frontend connects to: ws://localhost:8000/api/v1/ws/discoveries/{discovery_id}
-    
+
     Messages received:
     - {"type": "progress", "progress": 50, "status": "running", "message": "Scanning..."}
     - {"type": "complete", "device_count": 42}
@@ -3377,7 +3467,7 @@ async def websocket_discovery_status(websocket: WebSocket, discovery_id: str):
     await manager.connect(websocket, discovery_id)
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
             await websocket.send_json({"type": "ping"})
     except WebSocketDisconnect:
         manager.disconnect(websocket, discovery_id)

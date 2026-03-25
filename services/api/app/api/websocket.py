@@ -1,7 +1,8 @@
 """
 WebSocket manager for real-time updates
 """
-from fastapi import WebSocket, WebSocketDisconnect
+
+from fastapi import WebSocket
 from typing import Dict, List
 import json
 import redis
@@ -58,4 +59,5 @@ async def publish_discovery_update(discovery_id: str, update: dict):
         redis_client.close()
     except Exception as e:
         import logging
+
         logging.warning(f"Failed to publish discovery update: {e}")

@@ -71,18 +71,15 @@ app = FastAPI(
 
 # Rate limiter with default limits
 limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=[settings.RATE_LIMIT_READ]
+    key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_READ]
 )
 app.state.limiter = limiter
 
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Rate limit exceeded"}
-    )
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+
 
 # CORS middleware
 app.add_middleware(

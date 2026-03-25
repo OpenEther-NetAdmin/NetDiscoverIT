@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Header, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import User
+from app.api.schemas import AgentAuth, User
 from app.core.config import settings
 from app.core.security import decode_token
 from app.models.models import AuditLog, LocalAgent, User as UserModel
@@ -88,7 +88,7 @@ async def get_internal_api_key(x_internal_api_key: str = Header(...)) -> str:
 async def get_agent_auth(
     x_agent_key: str = Header(..., alias="X-Agent-Key"),
     db: AsyncSession = Depends(get_db),
-) -> "AgentAuth":
+) -> AgentAuth:
     """
     Validate agent API key from X-Agent-Key header.
     Returns agent context with org_id and agent_id.
@@ -103,8 +103,6 @@ async def get_agent_auth(
 
     result = await db.execute(select(LocalAgent).where(LocalAgent.is_active is True))
     agents = result.scalars().all()
-
-    from app.api.schemas import AgentAuth
 
     agent_context = None
     for agent in agents:
@@ -131,7 +129,7 @@ async def audit_log(
     resource_name: str = None,
     outcome: str = "success",
     details: dict = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -144,13 +142,18 @@ async def audit_log(
         resource_name: The name of the resource (optional)
         outcome: 'success', 'failure', or 'denied'
         details: Additional details as a dict
+        current_user: The user performing the action (optional, for unauthenticated actions)
     """
     if details is None:
         details = {}
+
+    org_id = UUID(current_user.organization_id) if current_user else None
+    user_id = UUID(current_user.id) if current_user else None
+
     audit_entry = AuditLog(
         id=uuid4(),
-        organization_id=UUID(current_user.organization_id),
-        user_id=UUID(current_user.id),
+        organization_id=org_id,
+        user_id=user_id,
         action=action,
         resource_type=resource_type,
         resource_id=UUID(resource_id) if resource_id else None,

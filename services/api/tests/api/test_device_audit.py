@@ -31,9 +31,6 @@ class DummyResult:
     def one_or_none(self):
         return self.scalar_one_or_none()
 
-    def scalar_one_or_none(self):
-        return self._value
-
 
 class DummyScalarResult:
     def __init__(self, value):
@@ -52,17 +49,6 @@ class DummyScalarResult:
 
     def one_or_none(self):
         return self.scalar_one_or_none()
-
-
-class DummyScalarResult:
-    def __init__(self, value):
-        self._value = value
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._value
 
 
 def _make_device(device_id, hostname, org_id):
@@ -127,8 +113,10 @@ async def test_device_routes_write_audit_logs():
         await routes.get_device(device_id=device_id, current_user=mock_user, db=mock_db)
 
         mock_db.execute = AsyncMock(side_effect=[DummyResult(None), DummyResult(device)])
+        from app.api.schemas import DeviceCreate
         await routes.create_device(
-            device=MagicMock(
+            request=MagicMock(),
+            device=DeviceCreate(
                 hostname=created_device.hostname,
                 management_ip=created_device.ip_address,
                 vendor=created_device.vendor,
@@ -140,9 +128,11 @@ async def test_device_routes_write_audit_logs():
         )
 
         mock_db.execute = AsyncMock(side_effect=fake_execute)
+        from app.api.schemas import DeviceUpdate
         await routes.update_device(
             device_id=device_id,
-            device_update=MagicMock(model_dump=lambda exclude_unset=True: {}),
+            request=MagicMock(),
+            device_update=DeviceUpdate(),
             current_user=mock_user,
             db=mock_db,
         )

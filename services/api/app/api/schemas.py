@@ -113,6 +113,12 @@ class Device(DeviceBase):
     organization_id: str
     created_at: datetime
     updated_at: datetime
+    
+    # ML role classification
+    inferred_role: str | None = None
+    role_confidence: float | None = None
+    role_classified_at: datetime | None = None
+    role_classifier_version: str | None = None
 
     class Config:
         from_attributes = True

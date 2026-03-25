@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     Integer,
+    Float,
     Boolean,
     DateTime,
     ForeignKey,
@@ -197,6 +198,13 @@ class Device(Base):
         String(50)
     )  # router, switch, firewall, wireless, server, unknown
     device_role = Column(String(50))  # core, distribution, access, etc.
+    
+    # ML role classification
+    inferred_role = Column(String(50), nullable=True)  # from taxonomy
+    role_confidence = Column(Float, nullable=True)     # 0.0 - 1.0
+    role_classified_at = Column(DateTime(timezone=True), nullable=True)
+    role_classifier_version = Column(String(20), nullable=True)
+    
     serial_number = Column(String(100))
     location = Column(String(255))
     # Compliance scope tags — which regulatory frameworks this device is in scope for.

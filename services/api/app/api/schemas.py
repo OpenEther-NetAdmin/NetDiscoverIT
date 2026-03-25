@@ -5,8 +5,9 @@ API Schemas
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
+from uuid import UUID
 from enum import Enum
 
 
@@ -441,6 +442,21 @@ class AgentUploadRequest(BaseModel):
 
     devices: list[DeviceMetadataUpload]
     scan_id: str | None = None
+
+
+class DeviceClassificationResponse(BaseModel):
+    inferred_role: str
+    confidence: float
+    classified_at: datetime
+    method: str
+    features: Dict[str, Any] = {}
+    
+    class Config:
+        from_attributes = True
+
+
+class BatchClassifyRequest(BaseModel):
+    device_ids: list[UUID]
 
 
 class AgentUploadResponse(BaseModel):

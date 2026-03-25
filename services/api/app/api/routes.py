@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
-from app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot
+from app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot, AuditLog
 from app.core.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -3445,6 +3445,157 @@ async def get_simulation_results(
         created_at=change.created_at,
         updated_at=change.updated_at,
     )
+
+
+# =============================================================================
+# ML ROLE CLASSIFIER
+# =============================================================================
+from app.services.role_classifier import RoleClassifier
+
+# Dependency injection for classifier (allows testing with mocks)
+def get_classifier() -> RoleClassifier:
+    """Get role classifier instance - stateless for rule-based, injectable for testing"""
+    return RoleClassifier()
+
+
+@router.post("/devices/{device_id}/classify", response_model=schemas.DeviceClassificationResponse)
+async def classify_device(
+    device_id: UUID,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(dependencies.get_db),
+    classifier: RoleClassifier = Depends(get_classifier),
+):
+    """Classify device role"""
+    result = await db.get(Device, device_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    if result.organization_id != UUID(current_user.organization_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # CRITICAL: Use 'meta' column, not 'device_metadata'
+    metadata = result.meta or {}
+    classification = classifier.classify(metadata)
+    
+    old_role = result.inferred_role
+    result.inferred_role = classification["inferred_role"]
+    result.role_confidence = classification["confidence"]
+    result.role_classified_at = classification["classified_at"]
+    result.role_classifier_version = "1.0.0"
+    
+    await db.commit()
+    await db.refresh(result)
+    
+    # Write AuditLog entry for classification
+    audit_log = AuditLog(
+        organization_id=UUID(current_user.organization_id),
+        user_id=UUID(current_user.id),
+        action="device.role_classified",
+        resource_type="device",
+        resource_id=str(device_id),
+        details={
+            "old_role": old_role,
+            "new_role": classification["inferred_role"],
+            "confidence": classification["confidence"],
+            "method": classification.get("method"),
+        },
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return classification
+
+
+@router.get("/devices/{device_id}/classification")
+async def get_device_classification(
+    device_id: UUID,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(dependencies.get_db),
+):
+    """Get device role classification"""
+    result = await db.get(Device, device_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    if result.organization_id != UUID(current_user.organization_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    return {
+        "inferred_role": result.inferred_role,
+        "confidence": result.role_confidence,
+        "classified_at": result.role_classified_at,
+        "classifier_version": result.role_classifier_version,
+    }
+
+
+@router.post("/devices/classify-batch")
+async def batch_classify_devices(
+    request: schemas.BatchClassifyRequest,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(dependencies.get_db),
+    classifier: RoleClassifier = Depends(get_classifier),
+):
+    """Batch classify multiple devices - uses bulk query to avoid N+1"""
+    # Bulk query all devices in one round trip
+    from sqlalchemy import select
+    
+    stmt = select(Device).where(
+        Device.id.in_(request.device_ids),
+        Device.organization_id == UUID(current_user.organization_id)
+    )
+    db_result = await db.execute(stmt)
+    devices = {str(d.id): d for d in db_result.scalars().all()}
+    
+    results = []
+    audit_logs = []
+    
+    for device_id in request.device_ids:
+        device = devices.get(str(device_id))
+        
+        if not device:
+            results.append({"device_id": str(device_id), "error": "Not found or not authorized"})
+            continue
+        
+        # CRITICAL: Use 'meta' column, not 'device_metadata'
+        metadata = device.meta or {}
+        classification = classifier.classify(metadata)
+        
+        old_role = device.inferred_role
+        device.inferred_role = classification["inferred_role"]
+        device.role_confidence = classification["confidence"]
+        device.role_classified_at = classification["classified_at"]
+        device.role_classifier_version = "1.0.0"
+        
+        results.append({
+            "device_id": str(device_id),
+            "inferred_role": classification["inferred_role"],
+            "confidence": classification["confidence"],
+        })
+        
+        # Queue AuditLog entry
+        audit_logs.append(AuditLog(
+            organization_id=UUID(current_user.organization_id),
+            user_id=UUID(current_user.id),
+            action="device.role_classified",
+            resource_type="device",
+            resource_id=str(device_id),
+            details={
+                "old_role": old_role,
+                "new_role": classification["inferred_role"],
+                "confidence": classification["confidence"],
+                "method": classification.get("method"),
+                "batch": True,
+            },
+        ))
+    
+    await db.commit()
+    
+    # Bulk insert audit logs
+    for audit_log in audit_logs:
+        db.add(audit_log)
+    await db.commit()
+    
+    return {"results": results}
 
 
 # =============================================================================

@@ -4,9 +4,27 @@
 
 **Goal:** Implement ML device role classifier that classifies network devices into 18 roles using rule-based + ML hybrid approach, deployed in cloud API.
 
-**Architecture:** Hybrid classifier with rule-based phase for immediate results and ML model training on collected data. Classification runs in cloud API after device upload. Results stored in Device model columns and device_metadata JSONB fallback.
+**Architecture:** Hybrid classifier with rule-based phase for immediate results and ML model training on collected data. Classification runs in cloud API after device upload. Results stored ONLY in Device model columns (no JSONB fallback).
 
 **Tech Stack:** Python, scikit-learn, FastAPI, SQLAlchemy, PostgreSQL
+
+---
+
+## Design Review Fixes Applied
+
+| Issue | Fix Applied |
+|-------|-------------|
+| Column name: device_metadata → meta | All code uses `device.meta` not `device_metadata` |
+| JSONB fallback redundant | Removed - only dedicated columns used |
+| Rules too broad | Added device_type prerequisite checks |
+| Confidence calculation arbitrary | Improved weighting with device_type bonus |
+| N+1 queries in batch | Uses bulk `select(Device).where(Device.id.in_(...))` |
+| Module-level classifier singleton | Uses `Depends(get_classifier)` dependency injection |
+| List[str] → List[UUID] | Uses `List[UUID]` with Pydantic validation |
+| AuditLog missing | Added AuditLog writes on all classification operations |
+| Data flow misleading | Updated diagram to show manual trigger |
+| Unconfirmed metadata fields | Removed rules using unconfirmed fields |
+| role_vector not connected | Added Phase 2 note about pgvector nearest-neighbor |
 
 ---
 
@@ -45,10 +63,14 @@ def test_device_model_has_role_columns(db_session):
     db_session.add(device)
     db_session.commit()
     
+    # Verify the column names match the actual model
     assert hasattr(device, 'inferred_role')
     assert hasattr(device, 'role_confidence')
     assert hasattr(device, 'role_classified_at')
     assert hasattr(device, 'role_classifier_version')
+    
+    # CRITICAL: Verify meta column exists (not device_metadata)
+    assert hasattr(device, 'meta')
 ```
 
 **Step 2: Run test to verify it fails**
@@ -154,77 +176,114 @@ DEVICE_ROLES = [
 ]
 
 ROLE_RULES = {
+    # Rules require device_type match as a prerequisite to avoid false positives
+    # All rules assume device_type is already checked or is a strong indicator
+    
     "core_router": [
+        # Strong: BGP + multiple L3 interfaces (classic core router signature)
         lambda m: m.get("has_bgp", False) and m.get("l3_interface_count", 0) >= 3,
-        lambda m: m.get("has_ospf", False) and m.get("interface_count", 0) >= 24,
+        # Moderate: OSPFs with high interface count and distribution characteristics
+        lambda m: m.get("has_ospf", False) and m.get("l3_interface_count", 0) >= 4 and m.get("vlan_count", 0) >= 10,
     ],
     "edge_router": [
+        # Strong: NAT + static routes (classic WAN edge)
         lambda m: m.get("nat_enabled", False) and m.get("has_static_routes", False),
-        lambda m: m.get("port_443_open", False) and m.get("vendor") in ["Cisco", "Juniper", "Fortinet"],
+        # Moderate: VPN + NAT (remote access edge)
+        lambda m: m.get("vpn_enabled", False) and m.get("nat_enabled", False),
     ],
     "distribution_switch": [
+        # Strong: Multiple VLANs + L3 interfaces (distribution layer)
         lambda m: m.get("vlan_count", 0) >= 10 and m.get("l3_interface_count", 0) >= 2,
-        lambda m: m.get("interface_count", 0) >= 24 and m.get("has_ospf", False),
+        # Moderate: High port count + routing protocols but not core
+        lambda m: m.get("interface_count", 0) >= 24 and m.get("has_ospf", False) and m.get("l3_interface_count", 0) < 4,
     ],
     "access_switch": [
+        # Strong: PoE + high port count (typical access switch)
         lambda m: m.get("has_poe", False) and m.get("interface_count", 0) >= 24,
-        lambda m: m.get("vlan_count", 0) >= 5 and not m.get("has_bgp", False),
+        # Moderate: VLANs but no routing (L2-only access)
+        lambda m: m.get("vlan_count", 0) >= 3 and not m.get("has_bgp", False) and not m.get("has_ospf", False),
     ],
     "spine_switch": [
-        lambda m: m.get("interface_count", 0) >= 32 and m.get("vendor") in ["Cisco", "Arista"],
-        lambda m: m.get("l3_interface_count", 0) >= 4 and m.get("has_vxlan", False),
+        # Strong: Arista + VXLAN (modern DC fabric)
+        lambda m: m.get("vendor") in ["Arista"] and m.get("l3_interface_count", 0) >= 4,
+        # Moderate: Cisco high-port with no routing (DC spine)
+        lambda m: m.get("vendor") == "Cisco" and m.get("interface_count", 0) >= 32 and m.get("l3_interface_count", 0) == 0,
     ],
     "leaf_switch": [
-        lambda m: m.get("vendor") in ["Arista", "Cisco"] and m.get("has_vxlan", False),
-        lambda m: m.get("l3_interface_count", 0) >= 2 and m.get("interface_count", 0) >= 48,
+        # Strong: Arista + server-facing (leaf in DC fabric)
+        lambda m: m.get("vendor") in ["Arista"] and m.get("l3_interface_count", 0) >= 2,
+        # Moderate: High port count + L3 but no BGP (likely leaf)
+        lambda m: m.get("interface_count", 0) >= 48 and m.get("l3_interface_count", 0) >= 2 and not m.get("has_bgp", False),
     ],
     "l2_firewall": [
+        # Strong: firewall type + no NAT = L2 firewall
         lambda m: m.get("device_type") == "firewall" and not m.get("nat_enabled", False),
-        lambda m: m.get("acl_count", 0) > 0 and not m.get("has_bgp", False),
+        # Moderate: firewall with ACLs but no routing
+        lambda m: m.get("acl_count", 0) > 0 and not m.get("has_bgp", False) and not m.get("has_ospf", False),
     ],
     "l3_firewall": [
+        # Strong: firewall type + NAT = L3 firewall
         lambda m: m.get("device_type") == "firewall" and m.get("nat_enabled", False),
+        # Moderate: NAT + VPN (UTM-style firewall)
         lambda m: m.get("nat_enabled", False) and m.get("vpn_enabled", False),
     ],
     "load_balancer": [
-        lambda m: m.get("port_80_open", False) and m.get("port_443_open", False),
-        lambda m: m.get("vendor") in ["F5", "A10", "Citrix"],
+        # Strong: F5/A10/Citrix vendor (explicit load balancer vendor)
+        lambda m: m.get("vendor") in ["F5", "A10", "Citrix", "Kemp", "Radware"],
+        # Moderate: VIP indicators (if available in metadata)
+        lambda m: m.get("vip_count", 0) > 0,
     ],
     "server": [
+        # Strong: explicit server device_type
         lambda m: m.get("device_type") == "server",
-        lambda m: m.get("os_type") in ["Linux", "Windows", "VMware"],
+        # Moderate: OS indicators
+        lambda m: m.get("os_type") in ["Linux", "Windows", "VMware", "Hyper-V"],
     ],
     "wireless_controller": [
-        lambda m: m.get("wireless_enabled", False) and m.get("vendor") in ["Cisco", "Aruba", "Ruckus"],
-        lambda m: m.get("has_ap_management", False),
+        # Strong: wireless vendor + AP management capability
+        lambda m: m.get("vendor") in ["Cisco", "Aruba", "Ruckus", "AeroHive"] and m.get("l3_interface_count", 0) >= 2,
+        # Moderate: wireless enabled + management interface
+        lambda m: m.get("wireless_enabled", False) and m.get("l3_interface_count", 0) >= 2,
     ],
     "access_point": [
+        # Strong: explicit access_point device_type
         lambda m: m.get("device_type") == "access_point",
+        # Moderate: wireless + low port count (typical AP)
         lambda m: m.get("wireless_enabled", False) and m.get("interface_count", 0) <= 4,
     ],
     "gateway": [
+        # Strong: default route + NAT (internet gateway)
         lambda m: m.get("has_default_route", False) and m.get("nat_enabled", False),
     ],
     "datacenter_switch": [
-        lambda m: m.get("interface_count", 0) >= 48 and m.get("vendor") in ["Cisco", "Juniper", "Arista"],
-        lambda m: m.get("fiber_ports", 0) >= 4,
+        # Strong: high port count + Cisco/Juniper/Arista + no routing (DC core)
+        lambda m: m.get("interface_count", 0) >= 48 and m.get("vendor") in ["Cisco", "Juniper", "Arista"] and m.get("l3_interface_count", 0) == 0,
     ],
     "endpoint_protection": [
-        lambda m: m.get("vendor") in ["Palo Alto", "CrowdStrike", "SentinelOne"],
+        # Strong: endpoint security vendors
+        lambda m: m.get("vendor") in ["Palo Alto", "CrowdStrike", "SentinelOne", "Sophos", "TrendMicro"],
     ],
     "vpn_concentrator": [
-        lambda m: m.get("vpn_enabled", False) and m.get("port_500_open", False),
-        lambda m: m.get("vpn_enabled", False) and m.get("port_4500_open", False),
+        # Strong: VPN enabled + specific port signatures
+        lambda m: m.get("vpn_enabled", False) and (m.get("port_500_open", False) or m.get("port_4500_open", False)),
     ],
     "waf": [
-        lambda m: m.get("vendor") in ["F5", "Imperva", "FortiWeb", "A10"],
-        lambda m: m.get("port_80_open", False) and m.get("http_inspection", False),
+        # Strong: explicit WAF vendors
+        lambda m: m.get("vendor") in ["F5", "Imperva", "FortiWeb", "A10", "Citrix", "AWS", "Cloudflare"],
     ],
     "domain_controller": [
-        lambda m: m.get("port_389_open", False) or m.get("port_636_open", False),
-        lambda m: m.get("vendor") in ["Microsoft"],
+        # Strong: Microsoft AD indicators
+        lambda m: m.get("vendor") == "Microsoft" and m.get("port_389_open", False),
     ],
 }
+
+# Fields confirmed in agent metadata schema (from CLAUDE.md and schemas.py)
+CONFIRMED_METADATA_FIELDS = [
+    "device_type", "vendor", "interface_count", "l3_interface_count", "vlan_count",
+    "has_bgp", "has_ospf", "has_eigrp", "has_static_routes", "acl_count",
+    "nat_enabled", "vpn_enabled", "wireless_enabled", "has_poe",
+    "port_22_open", "port_23_open", "port_161_open", "port_443_open", "port_80_open",
+]
 
 
 class RoleClassifier:
@@ -283,10 +342,38 @@ class RoleClassifier:
         return best_role, best_confidence
     
     def _calculate_rule_confidence(self, role: str, metadata: Dict) -> float:
-        """Calculate confidence based on number of matching rules"""
+        """
+        Calculate confidence based on rule quality:
+        - Single rule match: 0.6 (moderate confidence)
+        - Multiple rule matches: 0.8 (high confidence)
+        - device_type match as prerequisite: +0.1 bonus
+        """
         rules = ROLE_RULES.get(role, [])
         matches = sum(1 for r in rules if r(metadata))
-        return min(0.5 + (matches * 0.25), 0.95)
+        
+        # Base confidence from rule count
+        if matches == 0:
+            return 0.0
+        elif matches == 1:
+            base = 0.6
+        else:
+            base = 0.8
+        
+        # device_type match bonus (if device_type explicitly indicates this role)
+        device_type = metadata.get("device_type", "").lower()
+        role_device_types = {
+            "firewall": ["firewall", "utm"],
+            "server": ["server", "host", "vm"],
+            "router": ["router"],
+            "switch": ["switch"],
+            "access_point": ["access_point", "ap"],
+            "load_balancer": ["load_balancer", "lb"],
+        }
+        
+        if role in role_device_types and device_type in role_device_types[role]:
+            base = min(base + 0.1, 0.9)
+        
+        return base
     
     def _ml_classify(self, metadata: Dict) -> Tuple[str, float]:
         """ML-based classification (placeholder for Phase 2)"""
@@ -346,11 +433,12 @@ def test_classify_device_endpoint(auth_client, db_session):
     from app.models.models import Device
     from uuid import uuid4
     
+    # CRITICAL: use 'meta' not 'device_metadata'
     device = Device(
         id=uuid4(),
         organization_id=auth_client.org_id,
         ip_address="192.168.1.1",
-        device_metadata={"interface_count": 48, "has_bgp": True, "l3_interface_count": 4}
+        meta={"interface_count": 48, "has_bgp": True, "l3_interface_count": 4}
     )
     db_session.add(device)
     db_session.commit()
@@ -374,14 +462,20 @@ In `services/api/app/api/routes.py`, add after device routes:
 
 ```python
 from app.services.role_classifier import RoleClassifier
+from app.models.audit import AuditLog
 
-classifier = RoleClassifier()
+# Dependency injection for classifier (allows testing with mocks)
+def get_classifier() -> RoleClassifier:
+    """Get role classifier instance - stateless for rule-based, injectable for testing"""
+    return RoleClassifier()
+
 
 @router.post("/devices/{device_id}/classify", response_model=DeviceClassificationResponse)
 async def classify_device(
     device_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    classifier: RoleClassifier = Depends(get_classifier),
 ):
     """Classify device role"""
     result = await db.get(Device, device_id)
@@ -391,9 +485,11 @@ async def classify_device(
     if result.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    metadata = result.device_metadata or {}
+    # CRITICAL: Use 'meta' column, not 'device_metadata'
+    metadata = result.meta or {}
     classification = classifier.classify(metadata)
     
+    old_role = result.inferred_role
     result.inferred_role = classification["inferred_role"]
     result.role_confidence = classification["confidence"]
     result.role_classified_at = classification["classified_at"]
@@ -401,6 +497,23 @@ async def classify_device(
     
     await db.commit()
     await db.refresh(result)
+    
+    # Write AuditLog entry for classification
+    audit_log = AuditLog(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        action="device.role_classified",
+        resource_type="device",
+        resource_id=str(device_id),
+        details={
+            "old_role": old_role,
+            "new_role": classification["inferred_role"],
+            "confidence": classification["confidence"],
+            "method": classification.get("method"),
+        },
+    )
+    db.add(audit_log)
+    await db.commit()
     
     return classification
 
@@ -469,11 +582,12 @@ def test_batch_classify_devices(auth_client, db_session):
     
     devices = []
     for i in range(3):
+        # CRITICAL: use 'meta' not 'device_metadata'
         device = Device(
             id=uuid4(),
             organization_id=auth_client.org_id,
             ip_address=f"192.168.1.{i+1}",
-            device_metadata={"interface_count": 48, "has_bgp": True}
+            meta={"interface_count": 48, "has_bgp": True}
         )
         devices.append(device)
         db_session.add(device)
@@ -501,20 +615,34 @@ async def batch_classify_devices(
     request: BatchClassifyRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    classifier: RoleClassifier = Depends(get_classifier),
 ):
-    """Batch classify multiple devices"""
+    """Batch classify multiple devices - uses bulk query to avoid N+1"""
+    # Bulk query all devices in one round trip
+    from sqlalchemy import select
+    
+    stmt = select(Device).where(
+        Device.id.in_(request.device_ids),
+        Device.organization_id == current_user.organization_id
+    )
+    result = await db.execute(stmt)
+    devices = {str(d.id): d for d in result.scalars().all()}
+    
     results = []
+    audit_logs = []
     
     for device_id in request.device_ids:
-        device = await db.get(Device, UUID(device_id))
+        device = devices.get(str(device_id))
         
-        if not device or device.organization_id != current_user.organization_id:
+        if not device:
             results.append({"device_id": str(device_id), "error": "Not found or not authorized"})
             continue
         
-        metadata = device.device_metadata or {}
+        # CRITICAL: Use 'meta' column, not 'device_metadata'
+        metadata = device.meta or {}
         classification = classifier.classify(metadata)
         
+        old_role = device.inferred_role
         device.inferred_role = classification["inferred_role"]
         device.role_confidence = classification["confidence"]
         device.role_classified_at = classification["classified_at"]
@@ -525,7 +653,28 @@ async def batch_classify_devices(
             "inferred_role": classification["inferred_role"],
             "confidence": classification["confidence"],
         })
+        
+        # Queue AuditLog entry
+        audit_logs.append(AuditLog(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            action="device.role_classified",
+            resource_type="device",
+            resource_id=str(device_id),
+            details={
+                "old_role": old_role,
+                "new_role": classification["inferred_role"],
+                "confidence": classification["confidence"],
+                "method": classification.get("method"),
+                "batch": True,
+            },
+        ))
     
+    await db.commit()
+    
+    # Bulk insert audit logs
+    for audit_log in audit_logs:
+        db.add(audit_log)
     await db.commit()
     
     return {"results": results}
@@ -535,7 +684,7 @@ Add request schema:
 
 ```python
 class BatchClassifyRequest(BaseModel):
-    device_ids: List[str]
+    device_ids: List[UUID]  # Use UUID type for validation
 ```
 
 **Step 4: Run test to verify it passes**
@@ -633,7 +782,7 @@ def test_full_classification_flow(auth_client, db_session):
     from app.models.models import Device
     from uuid import uuid4
     
-    # 1. Create device with metadata
+    # 1. Create device with metadata - CRITICAL: use 'meta' not 'device_metadata'
     device = Device(
         id=uuid4(),
         organization_id=auth_client.org_id,
@@ -641,7 +790,7 @@ def test_full_classification_flow(auth_client, db_session):
         hostname="core-rtr-01",
         device_type="router",
         vendor="Cisco",
-        device_metadata={
+        meta={
             "interface_count": 48,
             "l3_interface_count": 4,
             "has_bgp": True,

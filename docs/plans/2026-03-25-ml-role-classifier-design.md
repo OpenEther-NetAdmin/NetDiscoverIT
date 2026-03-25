@@ -33,7 +33,23 @@ The ML Device Role Classifier automatically identifies network device roles (e.g
 
 ### Data Flow
 
+**Phase 1 (Manual Classification):**
 ```
+Agent Upload → Device Created → Manual API Call: POST /devices/{id}/classify
+                                                              ↓
+                                              RoleClassifier.classify()
+                                                              ↓
+                                              Save to Device.inferred_role
+                                                              ↓
+                                              Write AuditLog entry
+```
+
+**Phase 2 (Auto-classification on upload - Future):**
+```
+Agent Upload → Device Created → Auto-trigger RoleClassifier.classify()
+```
+
+**Note:** Phase 1 uses manual classification via API. Auto-classification on device upload is planned for Phase 2.
 Agent Upload → Device Create/Update → RoleClassifier.classify()
                                             ↓
                               ┌─────────────┴─────────────┐
@@ -108,25 +124,16 @@ Extended taxonomy with 18 roles:
 ### Primary Storage (New Columns)
 
 ```python
-# In Device model
+# In Device model - canonical store
 inferred_role = Column(String(50), nullable=True)  # role from taxonomy
 role_confidence = Column(Float, nullable=True)     # 0.0 - 1.0 confidence
 role_classified_at = Column(DateTime, nullable=True)  # classification timestamp
 role_classifier_version = Column(String(20), nullable=True)  # model version
+
+# Note: Device.meta JSONB is NOT used for classification results - only the dedicated columns above
 ```
 
-### Fallback Storage (Device.metadata)
-
-```python
-device_metadata = {
-    "inferred_role": "core_router",
-    "role_confidence": 0.85,
-    "role_classified_at": "2026-03-25T12:00:00Z",
-    "role_classifier_version": "1.0.0",
-    "classification_method": "rule_based" | "ml_model",
-    "feature_importance": {...}  # for ML model
-}
-```
+**Note:** Classification results are stored ONLY in the dedicated columns above. The Device.meta JSONB column is NOT used as a fallback to avoid dual source of truth.
 
 ---
 
@@ -140,7 +147,9 @@ device_metadata = {
 
 ### Phase 2: ML Model (Priority: Medium)
 
-- Train Random Forest classifier on collected data
+- **Important:** The Device model already has `role_vector = Column(Vector(768))` populated by Group 6a vectorizer
+- The Phase 2 ML classifier should use pgvector nearest-neighbor search against a labeled device set as the primary approach
+- Fallback: train Random Forest classifier on extracted features
 - Implement model versioning and registry
 - Target: 90%+ accuracy on validation set
 

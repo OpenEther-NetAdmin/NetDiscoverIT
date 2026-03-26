@@ -7,6 +7,7 @@ from . import discoveries, sites
 from . import devices, agents, path_visualizer
 from . import alerts, integrations
 from . import acl_snapshots, changes
+from . import nli
 
 router = APIRouter()
 
@@ -22,3 +23,4 @@ router.include_router(alerts.router,                                   tags=["al
 router.include_router(integrations.router,    prefix="/integrations",  tags=["integrations"])
 router.include_router(acl_snapshots.router,   prefix="/acl-snapshots", tags=["acl-snapshots"])
 router.include_router(changes.router,                                  tags=["changes"])
+router.include_router(nli.router,             prefix="/query",         tags=["nli"])

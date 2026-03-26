@@ -4,7 +4,7 @@ API Schemas
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -798,3 +798,54 @@ class NLIResponse(BaseModel):
     query_type: str           # topology | security | compliance | changes | inventory
     retrieved_device_count: int
     graph_traversal_used: bool
+
+
+VALID_FRAMEWORKS = {"pci_dss", "hipaa", "sox_itgc", "iso_27001", "fedramp", "soc2", "nist_csf"}
+VALID_FORMATS = {"pdf", "docx", "both"}
+
+
+class ComplianceReportCreate(BaseModel):
+    framework: str
+    format: str = "pdf"
+    period_start: datetime
+    period_end: datetime
+    scope_override: list[str] | None = None
+
+    @field_validator("framework")
+    @classmethod
+    def validate_framework(cls, v):
+        if v not in VALID_FRAMEWORKS:
+            raise ValueError(f"framework must be one of: {sorted(VALID_FRAMEWORKS)}")
+        return v
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, v):
+        if v not in VALID_FORMATS:
+            raise ValueError(f"format must be one of: {sorted(VALID_FORMATS)}")
+        return v
+
+    @field_validator("period_end")
+    @classmethod
+    def validate_period(cls, v, info):
+        if "period_start" in info.data and v <= info.data["period_start"]:
+            raise ValueError("period_end must be after period_start")
+        return v
+
+
+class ComplianceReportResponse(BaseModel):
+    id: str
+    status: str
+    framework: str
+    format: str
+    download_url: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class ComplianceReportListResponse(BaseModel):
+    items: list[ComplianceReportResponse]
+    total: int
+    skip: int
+    limit: int

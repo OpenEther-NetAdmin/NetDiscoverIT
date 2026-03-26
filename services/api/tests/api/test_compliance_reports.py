@@ -475,3 +475,59 @@ async def test_report_service_sets_failed_on_error():
 
     assert mock_doc.status == "failed"
     assert "DB down" in (mock_doc.error_message or "")
+
+
+# ---------------------------------------------------------------------------
+# API Route tests
+# ---------------------------------------------------------------------------
+
+
+def test_compliance_report_create_invalid_framework(client):
+    resp = client.post(
+        "/api/v1/compliance/reports",
+        json={
+            "framework": "invalid_framework",
+            "format": "pdf",
+            "period_start": "2026-01-01T00:00:00Z",
+            "period_end": "2026-03-31T00:00:00Z",
+        },
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "framework must be one of" in str(data)
+
+
+def test_compliance_report_create_invalid_format(client):
+    resp = client.post(
+        "/api/v1/compliance/reports",
+        json={
+            "framework": "pci_dss",
+            "format": "invalid_format",
+            "period_start": "2026-01-01T00:00:00Z",
+            "period_end": "2026-03-31T00:00:00Z",
+        },
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "format must be one of" in str(data)
+
+
+def test_compliance_report_create_invalid_period(client):
+    resp = client.post(
+        "/api/v1/compliance/reports",
+        json={
+            "framework": "pci_dss",
+            "format": "pdf",
+            "period_start": "2026-03-31T00:00:00Z",
+            "period_end": "2026-01-01T00:00:00Z",
+        },
+    )
+    assert resp.status_code == 422
+    data = resp.json()
+    assert "period_end must be after period_start" in str(data)
+
+
+def test_compliance_report_get_invalid_uuid(client):
+    resp = client.get("/api/v1/compliance/reports/not-a-valid-uuid")
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid report ID"

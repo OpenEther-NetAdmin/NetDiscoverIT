@@ -93,5 +93,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_WRITE: str = "60/minute"
     RATE_LIMIT_READ: str = "200/minute"
 
+    # NLI / RAG
+    NLI_VECTOR_TOP_K: int = 5      # devices retrieved per domain; clamped to 20 at runtime
+    NLI_RATE_LIMIT: str = "10/minute"
+
 
 settings = Settings()

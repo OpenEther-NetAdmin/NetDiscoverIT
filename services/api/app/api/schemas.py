@@ -771,3 +771,30 @@ class ACLSnapshotListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+# ---------------------------------------------------------------------------
+# NLI / RAG schemas
+# ---------------------------------------------------------------------------
+
+class NLIQuery(BaseModel):
+    """Natural language query request"""
+    question: str
+    top_k: int = 5  # devices per domain; clamped to 20
+
+
+class NLISource(BaseModel):
+    """A device that contributed to the NLI answer"""
+    device_id: str
+    hostname: str
+    similarity: float
+
+
+class NLIResponse(BaseModel):
+    """Natural language query response"""
+    answer: str
+    sources: list[NLISource]
+    confidence: float         # 0.0–1.0 from Claude's self-assessment
+    query_type: str           # topology | security | compliance | changes | inventory
+    retrieved_device_count: int
+    graph_traversal_used: bool

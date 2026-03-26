@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from app.api import dependencies
-from app.api import routes
+from app.api.routes import devices
 from app.api.schemas import User
 
 
@@ -97,24 +97,20 @@ async def test_device_routes_write_audit_logs():
         return kwargs.get("action")
 
     async def fake_execute(*args, **kwargs):
-        if getattr(routes, "Site", None) is not None and any(
-            getattr(arg, "name", None) == "sites" for arg in args
-        ):
-            return DummyScalarResult([])
         return DummyScalarResult([device])
 
     original_audit_log = dependencies.audit_log
-    original_routes_audit_log = routes.dependencies.audit_log
+    original_devices_audit_log = devices.dependencies.audit_log
     dependencies.audit_log = capture_audit_log
-    routes.dependencies.audit_log = capture_audit_log
+    devices.dependencies.audit_log = capture_audit_log
     mock_db.execute = AsyncMock(side_effect=fake_execute)
     try:
-        await routes.list_devices(current_user=mock_user, db=mock_db)
-        await routes.get_device(device_id=device_id, current_user=mock_user, db=mock_db)
+        await devices.list_devices(current_user=mock_user, db=mock_db)
+        await devices.get_device(device_id=device_id, current_user=mock_user, db=mock_db)
 
         mock_db.execute = AsyncMock(side_effect=[DummyResult(None), DummyResult(device)])
         from app.api.schemas import DeviceCreate
-        await routes.create_device(
+        await devices.create_device(
             request=MagicMock(),
             device=DeviceCreate(
                 hostname=created_device.hostname,
@@ -129,17 +125,17 @@ async def test_device_routes_write_audit_logs():
 
         mock_db.execute = AsyncMock(side_effect=fake_execute)
         from app.api.schemas import DeviceUpdate
-        await routes.update_device(
+        await devices.update_device(
             request=MagicMock(),
             device_id=device_id,
             device_update=DeviceUpdate(),
             current_user=mock_user,
             db=mock_db,
         )
-        await routes.delete_device(request=MagicMock(), device_id=device_id, current_user=mock_user, db=mock_db)
+        await devices.delete_device(request=MagicMock(), device_id=device_id, current_user=mock_user, db=mock_db)
     finally:
         dependencies.audit_log = original_audit_log
-        routes.dependencies.audit_log = original_routes_audit_log
+        devices.dependencies.audit_log = original_devices_audit_log
 
     assert [call["action"] for call in audit_calls] == [
         "device.list",

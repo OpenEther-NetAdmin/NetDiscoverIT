@@ -9,7 +9,8 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import pytest
 
-from app.api import auth, dependencies, routes
+from app.api import auth, dependencies
+from app.api.routes import devices, sites, agents
 from app.api.auth import UserCreate, UserLogin
 from app.api.schemas import DeviceCreate, DeviceUpdate, SiteCreate, SiteUpdate, User
 
@@ -170,14 +171,14 @@ async def test_device_routes_trigger_audit_log(audit_spy):
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
-        mp.setattr(routes.dependencies, "audit_log", spy)
+        mp.setattr(devices.dependencies, "audit_log", spy)
         db.execute = AsyncMock(side_effect=execute_side_effect)
 
-        await routes.list_devices(current_user=user, db=db)
-        await routes.get_device(str(device.id), current_user=user, db=db)
+        await devices.list_devices(current_user=user, db=db)
+        await devices.get_device(str(device.id), current_user=user, db=db)
 
         db.execute = AsyncMock(side_effect=[ DummyResult(created_device)])
-        await routes.create_device(
+        await devices.create_device(
             request=MagicMock(),
             device=DeviceCreate(
                 hostname=created_device.hostname,
@@ -191,14 +192,14 @@ async def test_device_routes_trigger_audit_log(audit_spy):
         )
 
         db.execute = AsyncMock(side_effect=execute_side_effect)
-        await routes.update_device(
+        await devices.update_device(
             request=MagicMock(),
             device_id=str(device.id),
             device_update=DeviceUpdate(),
             current_user=user,
             db=db,
         )
-        await routes.delete_device(request=MagicMock(), device_id=str(device.id), current_user=user, db=db)
+        await devices.delete_device(request=MagicMock(), device_id=str(device.id), current_user=user, db=db)
 
     assert [call["action"] for call in calls] == [
         "device.list",
@@ -235,11 +236,11 @@ async def test_site_routes_trigger_audit_log(audit_spy):
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
-        mp.setattr(routes.dependencies, "audit_log", spy)
+        mp.setattr(sites.dependencies, "audit_log", spy)
 
-        await routes.list_sites(current_user=user, db=db)
-        await routes.get_site(str(site.id), current_user=user, db=db)
-        await routes.create_site(
+        await sites.list_sites(current_user=user, db=db)
+        await sites.get_site(str(site.id), current_user=user, db=db)
+        await sites.create_site(
             SiteCreate(
                 name="site-2",
                 description="desc",
@@ -250,13 +251,13 @@ async def test_site_routes_trigger_audit_log(audit_spy):
             current_user=user,
             db=db,
         )
-        await routes.update_site(
+        await sites.update_site(
             str(site.id),
             SiteUpdate(),
             current_user=user,
             db=db,
         )
-        await routes.delete_site(str(site.id), current_user=user, db=db)
+        await sites.delete_site(str(site.id), current_user=user, db=db)
 
     assert [call["action"] for call in calls] == [
         "site.list",
@@ -290,12 +291,12 @@ async def test_agent_routes_trigger_audit_log(audit_spy):
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dependencies, "audit_log", spy)
-        mp.setattr(routes.dependencies, "audit_log", spy)
+        mp.setattr(agents.dependencies, "audit_log", spy)
 
-        await routes.list_agents(current_user=user, db=db)
-        await routes.get_agent(str(agent.id), current_user=user, db=db)
-        await routes.rotate_agent_key(str(agent.id), current_user=user, db=db)
-        await routes.agent_heartbeat(
+        await agents.list_agents(current_user=user, db=db)
+        await agents.get_agent(str(agent.id), current_user=user, db=db)
+        await agents.rotate_agent_key(str(agent.id), current_user=user, db=db)
+        await agents.agent_heartbeat(
             str(agent.id),
             SimpleNamespace(agent_version="1.1", capabilities={"x": True}),
             db=db,

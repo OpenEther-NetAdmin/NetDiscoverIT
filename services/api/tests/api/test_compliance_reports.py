@@ -352,3 +352,35 @@ def test_pdf_renderer_all_frameworks():
     for fw in ["pci_dss", "hipaa", "sox_itgc", "iso_27001", "fedramp", "soc2", "nist_csf"]:
         result = renderer.render(_make_analysis(fw), org_name="Test Org")
         assert result[:4] == b"%PDF", f"Framework {fw} did not produce valid PDF"
+
+
+# ---------------------------------------------------------------------------
+# DOCXRenderer tests
+# ---------------------------------------------------------------------------
+
+def test_docx_renderer_returns_valid_docx():
+    from app.services.compliance.docx_renderer import DOCXRenderer
+    import docx as python_docx
+    import io
+
+    renderer = DOCXRenderer()
+    result = renderer.render(_make_analysis(), org_name="Acme Corp")
+
+    assert isinstance(result, bytes)
+    assert len(result) > 0
+    doc = python_docx.Document(io.BytesIO(result))
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    assert "Acme Corp" in full_text
+    assert "PCI" in full_text
+
+
+def test_docx_renderer_contains_finding():
+    from app.services.compliance.docx_renderer import DOCXRenderer
+    import docx as python_docx
+    import io
+
+    renderer = DOCXRenderer()
+    result = renderer.render(_make_analysis(), org_name="TestOrg")
+    doc = python_docx.Document(io.BytesIO(result))
+    full_text = "\n".join(p.text for p in doc.paragraphs)
+    assert "PCI-DSS Req 2.2" in full_text

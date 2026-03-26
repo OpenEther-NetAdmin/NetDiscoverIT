@@ -7,7 +7,8 @@ __init__.py re-exports `router` so main.py needs no changes.
 from fastapi import APIRouter
 from . import health, portal, websocket, discoveries, sites
 from . import devices, agents, path_visualizer
-from ._legacy import router as _legacy_router
+from . import alerts, integrations, acl_snapshots
+from ._legacy import router as _legacy_router  # changes + simulation only
 
 router = APIRouter()
 router.include_router(health.router)
@@ -18,4 +19,7 @@ router.include_router(sites.router, prefix="/sites", tags=["sites"])
 router.include_router(devices.router, prefix="/devices", tags=["devices"])
 router.include_router(agents.router, tags=["agents"])
 router.include_router(path_visualizer.router, tags=["path"])
-router.include_router(_legacy_router)   # alerts, integrations, acl_snapshots, changes remain
+router.include_router(alerts.router, tags=["alerts"])
+router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
+router.include_router(acl_snapshots.router, prefix="/acl-snapshots", tags=["acl-snapshots"])
+router.include_router(_legacy_router)

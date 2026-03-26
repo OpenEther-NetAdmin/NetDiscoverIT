@@ -5,7 +5,7 @@ API Dependencies
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
 
-from fastapi import Depends, HTTPException, Header, status
+from fastapi import Depends, HTTPException, Header, status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,3 +167,10 @@ async def audit_log(
     await db.commit()
 
     return audit_entry
+
+def get_rate_limit(request: Request) -> str:
+    """Determine rate limit based on request method"""
+    if request.method in ["POST", "PATCH", "DELETE", "PUT"]:
+        return settings.RATE_LIMIT_WRITE
+    return settings.RATE_LIMIT_READ
+

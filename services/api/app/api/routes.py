@@ -17,20 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api import dependencies
-from app.api.dependencies import get_db, get_current_user, get_agent_auth
+from app.api.dependencies import get_db, get_current_user, get_agent_auth, get_rate_limit
 from app.models.models import Device, Site, LocalAgent, Discovery, ACLSnapshot, AuditLog
 from app.core.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
-
-
-def get_rate_limit(request: Request) -> str:
-    """Determine rate limit based on request method"""
-    if request.method in ["POST", "PATCH", "DELETE", "PUT"]:
-        return settings.RATE_LIMIT_WRITE
-    return settings.RATE_LIMIT_READ
 
 
 router = APIRouter()
@@ -151,8 +144,8 @@ def _device_response(device_obj: Device) -> schemas.Device:
     """Build a device response with safe timestamp defaults."""
     from datetime import datetime, timezone
 
-    created_at = device_obj.created_at or datetime.now(timezone.utc)
-    updated_at = device_obj.updated_at or created_at
+    created_at = getattr(device_obj, "created_at", None) or getattr(device_obj, "discovered_at", None) or datetime.now(timezone.utc)
+    updated_at = getattr(device_obj, "updated_at", None) or getattr(device_obj, "last_seen", None) or created_at
 
     return schemas.Device(
         id=str(device_obj.id),
@@ -328,17 +321,7 @@ async def update_device(
         db=db,
     )
 
-    return schemas.Device(
-        id=str(device.id),
-        hostname=device.hostname,
-        management_ip=str(device.ip_address),
-        vendor=device.vendor,
-        device_type=device.device_type,
-        role=device.device_role,
-        organization_id=str(device.organization_id),
-        created_at=device.created_at,
-        updated_at=device.updated_at,
-    )
+    return _device_response(device)
 
 
 @router.delete("/devices/{device_id}", status_code=204)
@@ -2116,41 +2099,7 @@ async def _test_integration(integration, credentials, test_message):
 # CHANGE RECORDS
 # =============================================================================
 
-
-async def generate_change_number(db: AsyncSession) -> str:
-    """Generate unique change number: CHG-YYYY-NNNN"""
-    from datetime import datetime
-    from sqlalchemy import func, select
-    from app.models.models import ChangeRecord
-
-    year = datetime.utcnow().year
-    prefix = f"CHG-{year}-"
-
-    result = await db.execute(
-        select(func.count())
-        .select_from(ChangeRecord)
-        .where(ChangeRecord.change_number.like(f"{prefix}%"))
-    )
-    count = result.scalar() or 0
-
-    return f"{prefix}{count + 1:04d}"
-
-
-VALID_TRANSITIONS = {
-    "draft": ["proposed", "deleted"],
-    "proposed": ["approved", "draft"],
-    "approved": ["scheduled", "in_progress", "rolled_back"],
-    "scheduled": ["in_progress", "rolled_back"],
-    "in_progress": ["completed", "failed", "rolled_back"],
-    "completed": ["rolled_back"],
-    "failed": ["proposed"],
-    "rolled_back": [],
-}
-
-
-def can_transition(current_status: str, new_status: str) -> bool:
-    """Check if state transition is valid"""
-    return new_status in VALID_TRANSITIONS.get(current_status, [])
+from app.services.change_service import VALID_TRANSITIONS, can_transition, generate_change_number
 
 
 TRANSITION_ROLES = {

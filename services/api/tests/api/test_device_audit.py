@@ -130,13 +130,13 @@ async def test_device_routes_write_audit_logs():
         mock_db.execute = AsyncMock(side_effect=fake_execute)
         from app.api.schemas import DeviceUpdate
         await routes.update_device(
-            device_id=device_id,
             request=MagicMock(),
+            device_id=device_id,
             device_update=DeviceUpdate(),
             current_user=mock_user,
             db=mock_db,
         )
-        await routes.delete_device(device_id=device_id, current_user=mock_user, db=mock_db)
+        await routes.delete_device(request=MagicMock(), device_id=device_id, current_user=mock_user, db=mock_db)
     finally:
         dependencies.audit_log = original_audit_log
         routes.dependencies.audit_log = original_routes_audit_log

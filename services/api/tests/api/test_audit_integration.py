@@ -176,9 +176,10 @@ async def test_device_routes_trigger_audit_log(audit_spy):
         await routes.list_devices(current_user=user, db=db)
         await routes.get_device(str(device.id), current_user=user, db=db)
 
-        db.execute = AsyncMock(side_effect=[DummyResult(None), DummyResult(created_device)])
+        db.execute = AsyncMock(side_effect=[ DummyResult(created_device)])
         await routes.create_device(
-            DeviceCreate(
+            request=MagicMock(),
+            device=DeviceCreate(
                 hostname=created_device.hostname,
                 management_ip=created_device.ip_address,
                 vendor=created_device.vendor,
@@ -191,12 +192,13 @@ async def test_device_routes_trigger_audit_log(audit_spy):
 
         db.execute = AsyncMock(side_effect=execute_side_effect)
         await routes.update_device(
-            str(device.id),
-            DeviceUpdate(),
+            request=MagicMock(),
+            device_id=str(device.id),
+            device_update=DeviceUpdate(),
             current_user=user,
             db=db,
         )
-        await routes.delete_device(str(device.id), current_user=user, db=db)
+        await routes.delete_device(request=MagicMock(), device_id=str(device.id), current_user=user, db=db)
 
     assert [call["action"] for call in calls] == [
         "device.list",
@@ -226,7 +228,7 @@ async def test_site_routes_trigger_audit_log(audit_spy):
     db.execute = AsyncMock(side_effect=[
         ObjectListResult([site]),
         SingleObjectResult(site),
-        DummyResult(None),
+        
         SingleObjectResult(site),
         SingleObjectResult(site),
     ])

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
+import pytest  # noqa: F401
 
 from app.services.compliance.evidence_models import (
     AuditEvidence,

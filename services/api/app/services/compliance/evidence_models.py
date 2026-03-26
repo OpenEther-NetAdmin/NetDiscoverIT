@@ -24,7 +24,7 @@ class DeviceEvidence:
 class ChangeEvidence:
     change_number: str
     title: str
-    status: str
+    status: Literal["draft", "proposed", "approved", "implemented", "verified", "rolled_back", "failed"]
     requested_by: str | None
     approved_by: str | None
     approved_at: datetime | None
@@ -38,7 +38,7 @@ class ChangeEvidence:
 class AuditEvidence:
     log_id: str
     action: str        # "resource_type.verb"
-    outcome: str       # "success" | "failure"
+    outcome: Literal["success", "failure"]
     user_id: str | None
     performed_at: datetime
 

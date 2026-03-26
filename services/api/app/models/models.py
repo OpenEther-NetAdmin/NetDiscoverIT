@@ -213,7 +213,7 @@ class Device(Base):
     #         "ISO27001", "SOC2", "NIST-CSF" — multiple allowed.
     # Set by customer during onboarding or device classification; updated by ML role classifier.
     compliance_scope = Column(JSONB, default=list)  # e.g. ["PCI-CDE", "HIPAA-PHI"]
-    meta = Column(JSONB, default=dict)
+    meta = Column("metadata", JSONB, default=dict)
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)

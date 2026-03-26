@@ -384,3 +384,94 @@ def test_docx_renderer_contains_finding():
     doc = python_docx.Document(io.BytesIO(result))
     full_text = "\n".join(p.text for p in doc.paragraphs)
     assert "PCI-DSS Req 2.2" in full_text
+
+
+# ---------------------------------------------------------------------------
+# ReportService tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_report_service_sets_completed_on_success():
+    from app.services.compliance.report_service import generate_report
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from uuid import uuid4
+
+    export_id = str(uuid4())
+    org_id    = str(uuid4())
+
+    mock_db      = AsyncMock()
+    mock_neo4j   = MagicMock()
+    mock_doc     = MagicMock()
+    mock_doc.id  = export_id
+    mock_doc.status = "pending"
+
+    fetch_result = MagicMock()
+    fetch_result.scalar_one_or_none.return_value = mock_doc
+    mock_db.execute = AsyncMock(return_value=fetch_result)
+
+    with (
+        patch("app.services.compliance.report_service.EvidenceCollector") as MockCollector,
+        patch("app.services.compliance.report_service.FrameworkAnalyzer") as MockAnalyzer,
+        patch("app.services.compliance.report_service.PDFRenderer") as MockPDF,
+        patch("app.services.compliance.report_service.storage_service") as MockStorage,
+    ):
+        mock_pkg = MagicMock()
+        MockCollector.return_value.collect = AsyncMock(return_value=mock_pkg)
+
+        mock_analysis = _make_analysis()
+        MockAnalyzer.return_value.analyze.return_value = mock_analysis
+
+        MockPDF.return_value.render.return_value = b"%PDF-fake"
+        MockStorage.upload_file.return_value = f"exports/{org_id}/report.pdf"
+
+        await generate_report(
+            export_document_id=export_id,
+            org_id=org_id,
+            org_name="Acme",
+            framework="pci_dss",
+            report_format="pdf",
+            period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
+            db=mock_db,
+            neo4j_client=mock_neo4j,
+        )
+
+    assert mock_doc.status == "completed"
+    assert mock_doc.storage_path == f"exports/{org_id}/report.pdf"
+
+
+@pytest.mark.asyncio
+async def test_report_service_sets_failed_on_error():
+    from app.services.compliance.report_service import generate_report
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from uuid import uuid4
+
+    export_id = str(uuid4())
+    org_id    = str(uuid4())
+
+    mock_db  = AsyncMock()
+    mock_doc = MagicMock()
+    mock_doc.id = export_id
+    mock_doc.status = "pending"
+
+    fetch_result = MagicMock()
+    fetch_result.scalar_one_or_none.return_value = mock_doc
+    mock_db.execute = AsyncMock(return_value=fetch_result)
+
+    with patch("app.services.compliance.report_service.EvidenceCollector") as MockCollector:
+        MockCollector.return_value.collect = AsyncMock(side_effect=RuntimeError("DB down"))
+
+        await generate_report(
+            export_document_id=export_id,
+            org_id=org_id,
+            org_name="Acme",
+            framework="pci_dss",
+            report_format="pdf",
+            period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
+            db=mock_db,
+            neo4j_client=MagicMock(),
+        )
+
+    assert mock_doc.status == "failed"
+    assert "DB down" in (mock_doc.error_message or "")

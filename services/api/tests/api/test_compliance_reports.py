@@ -294,3 +294,61 @@ def test_analyzer_returns_report_analysis():
     assert analysis.framework == "hipaa"
     assert analysis.export_document_id == "doc-42"
     assert isinstance(analysis.findings, list)
+
+
+# ---------------------------------------------------------------------------
+# PDFRenderer tests
+# ---------------------------------------------------------------------------
+
+def _make_analysis(framework: str = "pci_dss"):
+    from app.services.compliance.evidence_models import ReportAnalysis, ControlFinding, DeviceEvidence
+    return ReportAnalysis(
+        framework=framework,
+        org_id="org-1",
+        period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
+        generated_at=datetime(2026, 3, 26, tzinfo=timezone.utc),
+        export_document_id="doc-1",
+        findings=[
+            ControlFinding(
+                control_id="PCI-DSS Req 2.2",
+                description="No insecure protocols",
+                status="pass",
+                evidence_refs=["dev-1"],
+                notes="",
+            )
+        ],
+        devices=[
+            DeviceEvidence(
+                device_id="dev-1",
+                hostname="router-01",
+                compliance_scope=["PCI-CDE"],
+                security_posture={"ssh_enabled": True, "telnet_enabled": False,
+                                  "http_enabled": False, "https_enabled": True,
+                                  "snmp_enabled": False, "acl_count": 3},
+            )
+        ],
+        changes=[],
+        audit_events=[],
+        topology_paths=[],
+    )
+
+
+def test_pdf_renderer_returns_bytes():
+    from app.services.compliance.pdf_renderer import PDFRenderer
+
+    renderer = PDFRenderer()
+    result = renderer.render(_make_analysis(), org_name="Acme Corp")
+
+    assert isinstance(result, bytes)
+    assert len(result) > 0
+    assert result[:4] == b"%PDF"
+
+
+def test_pdf_renderer_all_frameworks():
+    from app.services.compliance.pdf_renderer import PDFRenderer
+
+    renderer = PDFRenderer()
+    for fw in ["pci_dss", "hipaa", "sox_itgc", "iso_27001", "fedramp", "soc2", "nist_csf"]:
+        result = renderer.render(_make_analysis(fw), org_name="Test Org")
+        assert result[:4] == b"%PDF", f"Framework {fw} did not produce valid PDF"

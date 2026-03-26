@@ -57,4 +57,7 @@ sentence-transformers==2.7.0
 anthropic==0.40.0
 tiktoken==0.7.0
 
+# Object Storage (MinIO / S3-compatible)
+boto3==1.34.0
+
 # scikit-learn>=1.3.0  # Uncomment for Phase 2 ML model

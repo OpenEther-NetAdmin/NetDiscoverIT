@@ -97,5 +97,15 @@ class Settings(BaseSettings):
     NLI_VECTOR_TOP_K: int = 5      # devices retrieved per domain; clamped to 20 at runtime
     NLI_RATE_LIMIT: str = "10/minute"
 
+    # Object Storage (MinIO / S3-compatible)
+    # MINIO_ACCESS_KEY and MINIO_SECRET_KEY are Optional so the app starts
+    # cleanly without MinIO configured. The first actual storage call raises
+    # StorageError if they are unset.
+    MINIO_ENDPOINT: str = "http://minio:9000"
+    MINIO_ACCESS_KEY: str | None = None
+    MINIO_SECRET_KEY: str | None = None
+    MINIO_BUCKET: str = "netdiscoverit"
+    MINIO_PRESIGNED_EXPIRY_SECONDS: int = 3600  # 1 hour
+
 
 settings = Settings()

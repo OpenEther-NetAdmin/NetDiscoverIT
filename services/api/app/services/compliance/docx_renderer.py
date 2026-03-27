@@ -4,6 +4,7 @@ DOCXRenderer — renders a ReportAnalysis to DOCX bytes using python-docx.
 from __future__ import annotations
 
 import io
+from collections import Counter
 
 from docx import Document
 from docx.shared import Pt, RGBColor
@@ -109,7 +110,9 @@ class DOCXRenderer:
             run.font.color.rgb = color
             doc.add_paragraph(finding.description)
             if finding.notes:
-                doc.add_paragraph(finding.notes).italic = True  # type: ignore[assignment]
+                p = doc.add_paragraph()
+                run = p.add_run(finding.notes)
+                run.italic = True
             if finding.evidence_refs:
                 refs = ", ".join(finding.evidence_refs[:5])
                 doc.add_paragraph(f"Evidence: {refs}")
@@ -136,7 +139,6 @@ class DOCXRenderer:
             return
         doc.add_heading("Audit Trail Summary", 2)
         doc.add_paragraph(f"{len(analysis.audit_events)} audit events in assessment period.")
-        from collections import Counter
         counts = Counter(e.action for e in analysis.audit_events)
         tbl = doc.add_table(rows=1, cols=2)
         tbl.style = "Table Grid"

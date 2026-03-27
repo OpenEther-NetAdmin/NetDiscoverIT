@@ -74,7 +74,6 @@ async def create_compliance_report(
                 report_format=fmt,
                 period_start=request.period_start,
                 period_end=request.period_end,
-                db=db,
                 neo4j_client=neo4j,
                 scope_override=request.scope_override,
             ))
@@ -112,7 +111,6 @@ async def create_compliance_report(
         report_format=request.format,
         period_start=request.period_start,
         period_end=request.period_end,
-        db=db,
         neo4j_client=neo4j,
         scope_override=request.scope_override,
     ))
@@ -186,13 +184,12 @@ async def list_compliance_reports(
     )
     if status:
         query = query.where(ExportDocument.status == status)
+    if framework:
+        query = query.where(ExportDocument.parameters["framework"].as_string() == framework)
 
     query = query.order_by(ExportDocument.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     docs = result.scalars().all()
-
-    if framework:
-        docs = [d for d in docs if (d.parameters or {}).get("framework") == framework]
 
     items = []
     for doc in docs:

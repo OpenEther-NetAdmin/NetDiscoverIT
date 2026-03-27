@@ -114,7 +114,6 @@ async def test_full_pdf_generation_pipeline(db_session, neo4j, org_and_device):
         report_format="pdf",
         period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
         period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
-        db=db_session,
         neo4j_client=neo4j,
     )
 
@@ -171,7 +170,6 @@ async def test_full_docx_generation_pipeline(db_session, neo4j, org_and_device):
         report_format="docx",
         period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
         period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
-        db=db_session,
         neo4j_client=neo4j,
     )
 
@@ -220,7 +218,6 @@ async def test_failed_generation_marks_document_failed(db_session, neo4j, org_an
             report_format="pdf",
             period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
             period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
-            db=db_session,
             neo4j_client=neo4j,
         )
 

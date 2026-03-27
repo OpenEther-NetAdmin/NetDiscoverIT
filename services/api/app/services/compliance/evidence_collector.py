@@ -74,7 +74,7 @@ class EvidenceCollector:
     ) -> list[DeviceEvidence]:
         if not scope_tags:
             result = await db.execute(
-                select(Device).where(Device.organization_id == org_uuid, Device.is_active == True)
+                select(Device).where(Device.organization_id == org_uuid, Device.is_active.is_(True))
             )
         else:
             tag_conditions = [
@@ -84,7 +84,7 @@ class EvidenceCollector:
             result = await db.execute(
                 select(Device).where(
                     Device.organization_id == org_uuid,
-                    Device.is_active == True,
+                    Device.is_active.is_(True),
                     or_(*tag_conditions),
                 )
             )

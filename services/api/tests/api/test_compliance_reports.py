@@ -408,13 +408,18 @@ async def test_report_service_sets_completed_on_success():
     fetch_result = MagicMock()
     fetch_result.scalar_one_or_none.return_value = mock_doc
     mock_db.execute = AsyncMock(return_value=fetch_result)
+    mock_db.commit = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=None)
 
     with (
+        patch("app.services.compliance.report_service.async_session_maker") as mock_session_maker,
         patch("app.services.compliance.report_service.EvidenceCollector") as MockCollector,
         patch("app.services.compliance.report_service.FrameworkAnalyzer") as MockAnalyzer,
         patch("app.services.compliance.report_service.PDFRenderer") as MockPDF,
         patch("app.services.compliance.report_service.storage_service") as MockStorage,
     ):
+        mock_session_maker.return_value = mock_db
         mock_pkg = MagicMock()
         MockCollector.return_value.collect = AsyncMock(return_value=mock_pkg)
 
@@ -432,7 +437,6 @@ async def test_report_service_sets_completed_on_success():
             report_format="pdf",
             period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
             period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
-            db=mock_db,
             neo4j_client=mock_neo4j,
         )
 
@@ -457,8 +461,15 @@ async def test_report_service_sets_failed_on_error():
     fetch_result = MagicMock()
     fetch_result.scalar_one_or_none.return_value = mock_doc
     mock_db.execute = AsyncMock(return_value=fetch_result)
+    mock_db.commit = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("app.services.compliance.report_service.EvidenceCollector") as MockCollector:
+    with (
+        patch("app.services.compliance.report_service.async_session_maker") as mock_session_maker,
+        patch("app.services.compliance.report_service.EvidenceCollector") as MockCollector,
+    ):
+        mock_session_maker.return_value = mock_db
         MockCollector.return_value.collect = AsyncMock(side_effect=RuntimeError("DB down"))
 
         await generate_report(
@@ -469,7 +480,6 @@ async def test_report_service_sets_failed_on_error():
             report_format="pdf",
             period_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
             period_end=datetime(2026, 3, 31, tzinfo=timezone.utc),
-            db=mock_db,
             neo4j_client=MagicMock(),
         )
 

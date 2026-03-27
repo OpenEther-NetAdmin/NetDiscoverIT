@@ -171,7 +171,7 @@ class FrameworkAnalyzer:
 
         not_simulated = [
             c for c in pkg.changes
-            if c.simulation_passed is None and c.status in ("completed", "verified")
+            if c.simulation_passed is None and c.status in ("implemented", "verified")
         ]
         findings.append(ControlFinding(
             control_id="SOX ITGC CC7.1",

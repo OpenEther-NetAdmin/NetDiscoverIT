@@ -21,12 +21,14 @@ class VectorUploader:
     async def upload_vectors(self, devices: List[Dict]) -> Dict:
         """Upload vector batch to cloud"""
         import httpx
-        
+
+        safe_devices = [self._extract_safe_device(d) for d in devices]
+
         payload = {
             "batch_id": self._generate_batch_id(),
             "customer_id": self._get_customer_id(),
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "devices": devices,
+            "devices": safe_devices,
             "recommendations_requested": False
         }
         
@@ -61,7 +63,29 @@ class VectorUploader:
             except Exception as e:
                 logger.error(f"Upload error: {e}")
                 return {"error": str(e)}
-    
+
+    def _extract_safe_device(self, device: Dict) -> Dict:
+        """Extract only safe metadata for upload - no raw config text.
+
+        Privacy architecture: Only sanitized metadata (counts, hashes, flags)
+        leaves the customer network, not raw config text.
+        """
+        safe_device = {
+            "device_id": device.get("device_id"),
+            "vectors": device.get("vectors", []),
+        }
+
+        metadata = device.get("metadata", {})
+        if isinstance(metadata, dict):
+            safe_device["metadata"] = {
+                k: v for k, v in metadata.items()
+                if k == "redaction_log"
+            }
+        else:
+            safe_device["metadata"] = metadata
+
+        return safe_device
+
     async def upload_with_retry(self, devices: List[Dict], max_retries: int = 3) -> Dict:
         """Upload with retry logic"""
         import asyncio

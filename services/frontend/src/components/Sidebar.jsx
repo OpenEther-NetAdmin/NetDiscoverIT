@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Box, VStack, Text, Icon, Flex, Select } from '@chakra-ui/react';
-import { FiGrid, FiServer, FiSearch, FiMap, FiSettings, FiClipboard } from 'react-icons/fi';
+import { FiGrid, FiServer, FiSearch, FiMap, FiSettings, FiClipboard, FiShare2, FiCheckCircle, FiMessageCircle } from 'react-icons/fi';
 import { useOrg } from '../context/OrgContext';
 
 const NavItem = ({ to, icon, children }) => (
@@ -73,6 +73,9 @@ const Sidebar = () => {
         <NavItem to="/discoveries" icon={FiSearch}>Discoveries</NavItem>
         <NavItem to="/changes" icon={FiClipboard}>Changes</NavItem>
         <NavItem to="/path-visualizer" icon={FiMap}>Path Visualizer</NavItem>
+        <NavItem to="/topology" icon={FiShare2}>Topology</NavItem>
+        <NavItem to="/compliance" icon={FiCheckCircle}>Compliance</NavItem>
+        <NavItem to="/assistant" icon={FiMessageCircle}>Assistant</NavItem>
         <NavItem to="/settings" icon={FiSettings}>Settings</NavItem>
       </VStack>
     </Box>

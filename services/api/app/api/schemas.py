@@ -4,7 +4,7 @@ API Schemas
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -179,12 +179,8 @@ class DeviceMetadata(BaseModel):
     vlans: list[dict] = []
     routing_table: list[dict] = []
 
-    acl_entries: list[dict] = []
-    firewall_rules: list[dict] = []
-
     running_services: list[str] = []
     installed_packages: list[dict] = []
-    users: list[dict] = []
 
     discovery_method: str | None = None
     discovery_timestamp: datetime | None = None
@@ -194,6 +190,15 @@ class DeviceMetadata(BaseModel):
 
     class Config:
         extra = "allow"
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_privacy_fields(cls, values: dict) -> dict:
+        privacy_fields = ("acl_entries", "firewall_rules", "users")
+        for field in privacy_fields:
+            if field in values:
+                raise ValueError(f"{field} is not allowed due to privacy architecture")
+        return values
 
 
 class CredentialType(str, Enum):

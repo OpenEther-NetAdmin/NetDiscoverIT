@@ -30,7 +30,7 @@ class ConfigNormalizer:
         """
         result = self._sanitizer.sanitize(raw_config)
         if isinstance(result, dict):
-            return result.get("sanitized", raw_config)
+            return result.get("sanitized_config", raw_config)
         return result
     
     async def normalize(self, raw_config: str) -> Dict:

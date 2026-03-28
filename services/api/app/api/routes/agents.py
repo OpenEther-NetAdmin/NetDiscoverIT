@@ -172,6 +172,7 @@ async def rotate_agent_key(
 async def agent_heartbeat(
     agent_id: str,
     heartbeat: schemas.HeartbeatRequest,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Agent heartbeat - updates last_seen, agent_version, capabilities"""

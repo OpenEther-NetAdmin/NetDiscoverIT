@@ -11,7 +11,7 @@ from app.core.security import (
     decode_token,
 )
 from app.db.database import get_db
-from app.models.models import User, LocalAgent
+from app.models.models import User, Organization, LocalAgent
 from app.api import dependencies
 from app.api.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,9 +206,17 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
+    new_org = Organization(
+        id=uuid4(),
+        name=f"Organization for {user_data.email}",
+        slug=f"org-{uuid4().hex[:8]}",
+    )
+    db.add(new_org)
+    await db.flush()
+
     new_user = User(
         id=uuid4(),
-        organization_id=uuid4(),
+        organization_id=new_org.id,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
         full_name=user_data.full_name,

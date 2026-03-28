@@ -5,6 +5,7 @@ Routes alerts to configured integrations (Slack, PagerDuty, etc.)
 """
 
 from uuid import UUID
+import json
 import logging
 
 from sqlalchemy import select
@@ -13,6 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import AlertEvent, IntegrationConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _deserialize_alert_config(encrypted_data: str) -> dict:
+    """Safely deserialize alert config from JSON string."""
+    return json.loads(encrypted_data)
 
 
 class AlertRouter:
@@ -254,7 +260,7 @@ class AlertRouter:
             fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
 
             creds = fernet.decrypt(integration.encrypted_credentials.encode()).decode()
-            creds_dict = eval(creds)
+            creds_dict = _deserialize_alert_config(creds)
 
             routing_key = creds_dict.get("routing_key")
 

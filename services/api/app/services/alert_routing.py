@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 
 def _deserialize_alert_config(encrypted_data: str) -> dict:
     """Safely deserialize alert config from JSON string."""
-    return json.loads(encrypted_data)
+    try:
+        result = json.loads(encrypted_data)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in alert config: {e}") from e
+    if not isinstance(result, dict):
+        raise TypeError(f"Alert config must be a JSON object, got {type(result).__name__}")
+    return result
 
 
 class AlertRouter:

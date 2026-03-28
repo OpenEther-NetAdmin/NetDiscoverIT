@@ -172,7 +172,7 @@ async def rotate_agent_key(
 async def agent_heartbeat(
     agent_id: str,
     heartbeat: schemas.HeartbeatRequest,
-    agent_auth: dict = Depends(dependencies.get_agent_auth),
+    agent_auth: schemas.AgentAuth = Depends(dependencies.get_agent_auth),
     db: AsyncSession = Depends(get_db),
 ):
     """Agent heartbeat - updates last_seen, agent_version, capabilities"""
@@ -183,7 +183,7 @@ async def agent_heartbeat(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid agent ID format")
 
-    org_id = UUID(agent_auth["organization_id"])
+    org_id = UUID(agent_auth.organization_id)
 
     result = await db.execute(
         select(LocalAgent).where(
@@ -211,6 +211,7 @@ async def agent_heartbeat(
         resource_name=agent.name,
         outcome="success",
         current_user=None,
+        organization_id=agent_auth.organization_id,
         db=db,
     )
 

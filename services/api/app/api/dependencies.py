@@ -130,6 +130,7 @@ async def audit_log(
     outcome: str = "success",
     details: dict = None,
     current_user: User | None = None,
+    organization_id: str = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -143,11 +144,18 @@ async def audit_log(
         outcome: 'success', 'failure', or 'denied'
         details: Additional details as a dict
         current_user: The user performing the action (optional, for unauthenticated actions)
+        organization_id: The organization ID (optional, derived from current_user if not provided)
     """
     if details is None:
         details = {}
 
-    org_id = UUID(current_user.organization_id) if current_user else None
+    if organization_id:
+        org_id = UUID(organization_id)
+    elif current_user:
+        org_id = UUID(current_user.organization_id)
+    else:
+        org_id = None
+        
     user_id = UUID(current_user.id) if current_user else None
 
     audit_entry = AuditLog(

@@ -12,7 +12,7 @@ import pytest
 from app.api import auth, dependencies
 from app.api.routes import devices, sites, agents
 from app.api.auth import UserCreate, UserLogin
-from app.api.schemas import DeviceCreate, DeviceUpdate, SiteCreate, SiteUpdate, User
+from app.api.schemas import AgentAuth, DeviceCreate, DeviceUpdate, SiteCreate, SiteUpdate, User
 
 
 class DummyResult:
@@ -277,6 +277,11 @@ async def test_agent_routes_trigger_audit_log(audit_spy):
     org_id = UUID(user.organization_id)
 
     agent = _mock_agent(org_id)
+    agent_auth = AgentAuth(
+        agent_id=str(agent.id),
+        organization_id=str(org_id),
+        agent_name=agent.name,
+    )
 
     db = AsyncMock()
     db.add = MagicMock()
@@ -299,6 +304,7 @@ async def test_agent_routes_trigger_audit_log(audit_spy):
         await agents.agent_heartbeat(
             str(agent.id),
             SimpleNamespace(agent_version="1.1", capabilities={"x": True}),
+            agent_auth=agent_auth,
             db=db,
         )
 

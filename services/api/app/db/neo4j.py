@@ -382,6 +382,32 @@ class Neo4jClient:
 
         return {"nodes": nodes, "edges": edges}
 
+    async def get_device_connections(self, organization_id: str) -> list[dict]:
+        """Return device-to-device connections for an org as {source, target} dicts.
+
+        Collapses interface-level CONNECTED_TO edges to device-level pairs.
+        Deduplicates by requiring d1.id < d2.id so each pair appears once.
+        Returns an empty list if the driver is not connected.
+        """
+        if not self._driver:
+            return []
+
+        cypher = (
+            "MATCH (d1:Device {organization_id: $org_id})"
+            "-[:HAS_INTERFACE]->(:Interface)-[:CONNECTED_TO]->"
+            "(:Interface)<-[:HAS_INTERFACE]-(d2:Device) "
+            "WHERE d2.organization_id = $org_id AND d1.id < d2.id "
+            "RETURN DISTINCT d1.id AS source, d2.id AS target"
+        )
+        edges = []
+        async with self._driver.session() as session:
+            result = await session.run(cypher, {"org_id": organization_id})
+            async for record in result:
+                edges.append(
+                    {"source": str(record["source"]), "target": str(record["target"])}
+                )
+        return edges
+
     async def delete_orphaned_interfaces(self) -> int:
         """Clean up orphaned interface nodes"""
         if not self._driver:

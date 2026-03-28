@@ -231,6 +231,37 @@ class ApiService {
   getMspOverview() {
     return this.request('/api/v1/msp/overview');
   }
+
+  getTopology() {
+    return this.request('/api/v1/topology');
+  }
+
+  listComplianceReports({ status, framework, skip = 0, limit = 20 } = {}) {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (framework) params.set('framework', framework);
+    params.set('skip', skip);
+    params.set('limit', limit);
+    return this.request(`/api/v1/compliance/reports?${params.toString()}`);
+  }
+
+  createComplianceReport({ framework, format, period_start, period_end, scope_override = null }) {
+    return this.request('/api/v1/compliance/reports', {
+      method: 'POST',
+      body: JSON.stringify({ framework, format, period_start, period_end, scope_override }),
+    });
+  }
+
+  getComplianceReport(id) {
+    return this.request(`/api/v1/compliance/reports/${id}`);
+  }
+
+  queryAssistant({ question, top_k = 5 }) {
+    return this.request('/api/v1/query', {
+      method: 'POST',
+      body: JSON.stringify({ question, top_k }),
+    });
+  }
 }
 
 export const api = new ApiService();

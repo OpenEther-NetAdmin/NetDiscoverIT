@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { Box, Flex } from '@chakra-ui/react';
+import { Box, Flex, Spinner, Center } from '@chakra-ui/react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
@@ -9,6 +9,16 @@ import PathVisualizer from './pages/PathVisualizer';
 import Settings from './pages/Settings';
 import ChangeList from './pages/changes/ChangeList';
 import ChangeDetail from './pages/changes/ChangeDetail';
+
+const TopologyMap = lazy(() => import('./pages/topology/TopologyMap'));
+const ComplianceViewer = lazy(() => import('./pages/compliance/ComplianceViewer'));
+const AssistantPage = lazy(() => import('./pages/assistant/AssistantPage'));
+
+const PageLoader = () => (
+  <Center h="100%">
+    <Spinner size="xl" color="blue.500" />
+  </Center>
+);
 
 function App() {
   return (
@@ -24,6 +34,9 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/changes" element={<ChangeList />} />
           <Route path="/changes/:id" element={<ChangeDetail />} />
+          <Route path="/topology" element={<Suspense fallback={<PageLoader />}><TopologyMap /></Suspense>} />
+          <Route path="/compliance" element={<Suspense fallback={<PageLoader />}><ComplianceViewer /></Suspense>} />
+          <Route path="/assistant" element={<Suspense fallback={<PageLoader />}><AssistantPage /></Suspense>} />
         </Routes>
       </Box>
     </Flex>

@@ -849,3 +849,28 @@ class ComplianceReportListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class TopologyNode(BaseModel):
+    """Node in a topology graph"""
+    id: str
+    type: str = "device"
+    hostname: str
+    device_type: str  # router | switch | firewall | server | unknown
+    management_ip: str | None = None
+    compliance_scope: list[str] = []
+    organization_id: str
+
+
+class TopologyEdge(BaseModel):
+    """Edge in a topology graph"""
+    source: str
+    target: str
+
+
+class TopologyResponse(BaseModel):
+    """Topology graph response"""
+    nodes: List[TopologyNode]
+    edges: List[TopologyEdge]
+    node_count: int
+    edge_count: int

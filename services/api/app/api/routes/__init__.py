@@ -9,6 +9,7 @@ from . import alerts, integrations
 from . import acl_snapshots, changes
 from . import nli
 from . import compliance_reports
+from . import topology
 
 router = APIRouter()
 
@@ -26,3 +27,4 @@ router.include_router(acl_snapshots.router,   prefix="/acl-snapshots", tags=["ac
 router.include_router(changes.router,                                  tags=["changes"])
 router.include_router(nli.router,             prefix="/query",         tags=["nli"])
 router.include_router(compliance_reports.router, prefix="/compliance/reports", tags=["compliance"])
+router.include_router(topology.router, prefix="/topology", tags=["Topology"])

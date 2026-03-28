@@ -251,3 +251,120 @@ class TestConfigNormalizerIntegration:
         assert hasattr(normalizer, "textfsm_parser")
         assert normalizer.textfsm_parser is not None
         assert "TextFSMParser" in str(type(normalizer.textfsm_parser))
+
+
+class TestCloudLLMPrivacy:
+    """Test that cloud LLM methods send sanitized config, not raw config"""
+    
+    SAMPLE_CONFIG_WITH_SECRETS = """
+hostname Router-Critical-01
+!
+interface GigabitEthernet0/0
+ description Uplink to Core
+ ip address 10.0.1.1 255.255.255.0
+!
+enable password SuperSecret123
+username admin password AdminPass456
+snmp-server community public
+!
+"""
+    
+    @pytest.mark.asyncio
+    async def test_gemini_sends_sanitized_config(self):
+        """Test that Gemini normalization sends sanitized config when GOOGLE_API_KEY is set"""
+        import httpx
+        from agent.normalizer import ConfigNormalizer
+        
+        config = MagicMock()
+        config.OLLAMA_BASE_URL = "http://localhost:11434"
+        normalizer = ConfigNormalizer(config)
+        
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = {}
+        normalizer.textfsm_parser = mock_parser
+        
+        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'test-key'}):
+            with patch.object(httpx, 'AsyncClient') as mock_client:
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                mock_response.json.return_value = {
+                    'candidates': [{
+                        'content': {
+                            'parts': [{'text': '{"hostname": "Router"}'}]
+                        }
+                    }]
+                }
+                
+                mock_client_instance = AsyncMock()
+                mock_client_instance.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+                mock_client.return_value = mock_client_instance
+                
+                await normalizer.normalize(self.SAMPLE_CONFIG_WITH_SECRETS)
+                
+                call_args = mock_client_instance.__aenter__.return_value.post.call_args
+                prompt_text = call_args.kwargs['json']['contents'][0]['parts'][0]['text']
+                
+                assert 'SuperSecret123' not in prompt_text, "Raw secret password should not be in prompt"
+                assert 'AdminPass456' not in prompt_text, "Raw admin password should not be in prompt"
+                assert 'public' not in prompt_text or '<community_string>' in prompt_text, "SNMP community should be sanitized"
+    
+    @pytest.mark.asyncio
+    async def test_anthropic_sends_sanitized_config(self):
+        """Test that Anthropic normalization sends sanitized config when ANTHROPIC_API_KEY is set"""
+        from agent.normalizer import ConfigNormalizer
+        
+        config = MagicMock()
+        config.OLLAMA_BASE_URL = "http://localhost:11434"
+        normalizer = ConfigNormalizer(config)
+        
+        mock_parser = MagicMock()
+        mock_parser.parse.return_value = {}
+        normalizer.textfsm_parser = mock_parser
+        
+        with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('anthropic.Anthropic') as mock_anthropic_class:
+                mock_instance = MagicMock()
+                mock_message = MagicMock()
+                mock_message.content = [MagicMock(text='{"hostname": "Router"}')]
+                mock_instance.messages.create.return_value = mock_message
+                mock_anthropic_class.return_value = mock_instance
+                
+                await normalizer.normalize(self.SAMPLE_CONFIG_WITH_SECRETS)
+                
+                mock_instance.messages.create.assert_called_once()
+                call_kwargs = mock_instance.messages.create.call_args.kwargs
+                prompt_text = call_kwargs['messages'][0]['content']
+                
+                assert 'SuperSecret123' not in prompt_text, "Raw secret password should not be in prompt"
+                assert 'AdminPass456' not in prompt_text, "Raw admin password should not be in prompt"
+                assert 'public' not in prompt_text or '<community_string>' in prompt_text, "SNMP community should be sanitized"
+    
+    def test_sanitize_for_cloud_removes_secrets(self):
+        """Test that _sanitize_for_cloud removes sensitive data"""
+        from agent.normalizer import ConfigNormalizer
+        
+        config = MagicMock()
+        normalizer = ConfigNormalizer(config)
+        
+        raw_config = """
+hostname TestRouter
+enable password SuperSecret123
+username admin password AdminPass456
+snmp-server community public
+"""
+        sanitized = normalizer._sanitize_for_cloud(raw_config)
+        
+        assert 'SuperSecret123' not in sanitized, "Raw secret password should be removed"
+        assert 'AdminPass456' not in sanitized, "Raw admin password should be removed"
+        assert 'password' in sanitized.lower() and ('<password>' in sanitized or '***' in sanitized), \
+            "Password pattern should be sanitized to token"
+    
+    def test_normalizer_has_sanitizer(self):
+        """Test that ConfigNormalizer has a sanitizer instance"""
+        from agent.normalizer import ConfigNormalizer
+        
+        config = MagicMock()
+        normalizer = ConfigNormalizer(config)
+        
+        assert hasattr(normalizer, '_sanitizer')
+        assert normalizer._sanitizer is not None

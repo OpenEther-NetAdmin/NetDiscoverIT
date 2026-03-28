@@ -8,6 +8,7 @@ import logging
 from typing import Dict
 
 from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
+from agent.sanitizer import ConfigSanitizer
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,19 @@ class ConfigNormalizer:
     def __init__(self, config):
         self.config = config
         self.textfsm_parser = TextFSMParser()
+        self._sanitizer = ConfigSanitizer(org_id=getattr(config, 'ORG_ID', 'default'))
+
+    def _sanitize_for_cloud(self, raw_config: str) -> str:
+        """Sanitize config for transmission to external cloud LLMs.
+        
+        Privacy architecture: When cloud LLM API keys are set, raw configs
+        must be sanitized before sending to external APIs to prevent sensitive
+        data from leaving the customer network.
+        """
+        result = self._sanitizer.sanitize(raw_config)
+        if isinstance(result, dict):
+            return result.get("sanitized", raw_config)
+        return result
     
     async def normalize(self, raw_config: str) -> Dict:
         """Convert raw config to JSON using TextFSM or LLM"""
@@ -102,11 +116,13 @@ Output valid JSON only, no explanations:"""
         if not api_key:
             raise Exception("GOOGLE_API_KEY not set")
         
+        sanitized_config = self._sanitize_for_cloud(raw_config)
+        
         prompt = f"""Convert this network device configuration to JSON.
 Only include factual information from the config. Do not infer or add fields.
 
 Configuration:
-{raw_config[:8000]}  # Limit length
+{sanitized_config[:8000]}  # Limit length
 
 Output valid JSON only, no explanations. Start your response with {{
 """
@@ -140,11 +156,13 @@ Output valid JSON only, no explanations. Start your response with {{
         
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
+        sanitized_config = self._sanitize_for_cloud(raw_config)
+        
         prompt = f"""Convert this network device configuration to JSON.
 Only include factual information from the config. Do not infer or add fields.
 
 Configuration:
-{raw_config[:10000]}  # Limit length
+{sanitized_config[:10000]}  # Limit length
 
 Output valid JSON only, no explanations:"""
         

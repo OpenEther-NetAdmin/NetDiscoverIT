@@ -4,11 +4,7 @@ import {
   DrawerHeader, DrawerBody, Flex, Text, Badge,
 } from '@chakra-ui/react';
 import ChangeDetail from './ChangeDetail';
-
-const STATUS_COLORS = {
-  draft: 'gray', proposed: 'yellow', approved: 'green',
-  implemented: 'purple', verified: 'teal', rolled_back: 'red',
-};
+import { STATUS_COLORS } from './changeUtils';
 
 const ChangeDrawer = ({ changeId, isOpen, onClose, statusHint, changeNumberHint }) => {
   return (

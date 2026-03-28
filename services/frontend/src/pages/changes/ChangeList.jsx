@@ -11,22 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useOrg } from '../../context/OrgContext';
 import ChangeDrawer from './ChangeDrawer';
 import TransitionModal from './TransitionModal';
-
-const STATUS_COLORS = {
-  draft: 'gray', proposed: 'yellow', approved: 'green',
-  implemented: 'purple', verified: 'teal', rolled_back: 'red',
-};
-const RISK_COLORS = { low: 'green', medium: 'orange', high: 'red', critical: 'red' };
-
-function getActionForStatus(status, role) {
-  const isAdmin = ['admin', 'msp_admin'].includes(role);
-  const isEngineer = ['engineer', 'admin', 'msp_admin'].includes(role);
-  if (status === 'draft' && isEngineer) return 'propose';
-  if (status === 'proposed' && isAdmin) return 'approve';
-  if (status === 'approved' && isEngineer) return 'implement';
-  if (status === 'implemented' && isAdmin) return 'verify';
-  return null;
-}
+import { STATUS_COLORS, RISK_COLORS, getActionForStatus } from './changeUtils';
 
 const ChangeList = () => {
   const { user } = useAuth();
@@ -86,7 +71,11 @@ const ChangeList = () => {
       else if (pendingAction === 'rollback') await api.rollbackChange(id, { rollback_evidence: text });
       toast({ title: 'Change updated', status: 'success', duration: 3000, isClosable: true });
       onModalClose();
-      await loadChanges();
+      const refreshed = await api.getChanges({ status: statusFilter, risk_level: riskFilter });
+      setChanges(refreshed || []);
+      // Keep the drawer header in sync with the updated status
+      const updated = (refreshed || []).find((c) => c.id === id);
+      if (updated) setSelectedChange(updated);
     } catch (err) {
       toast({ title: 'Action failed', description: err.message, status: 'error', duration: 5000, isClosable: true });
     } finally {
@@ -94,14 +83,12 @@ const ChangeList = () => {
     }
   };
 
-  const filtered = changes.filter((c) => {
-    const matchesStatus = !statusFilter || c.status === statusFilter;
-    const matchesRisk = !riskFilter || c.risk_level === riskFilter;
-    const matchesSearch = !search ||
-      c.title?.toLowerCase().includes(search.toLowerCase()) ||
-      c.change_number?.toLowerCase().includes(search.toLowerCase());
-    return matchesStatus && matchesRisk && matchesSearch;
-  });
+  // Status and risk are filtered server-side via getChanges(). Only text search is client-side.
+  const filtered = changes.filter((c) =>
+    !search ||
+    c.title?.toLowerCase().includes(search.toLowerCase()) ||
+    c.change_number?.toLowerCase().includes(search.toLowerCase())
+  );
 
   const userRole = user?.role || 'viewer';
 

@@ -42,15 +42,18 @@ test('renders change cards from API response', async () => {
 });
 
 test('filter by status narrows the visible cards', async () => {
-  api.getChanges.mockResolvedValue(CHANGES);
+  // Status filter is server-side: component re-fetches with status param on change.
+  api.getChanges
+    .mockResolvedValueOnce(CHANGES)                                  // initial load (all)
+    .mockResolvedValueOnce(CHANGES.filter((c) => c.status === 'draft')); // after filter
   api.getMspOverview.mockRejectedValue(new Error('403'));
   setAuthRole('engineer');
   renderWithProviders(<ChangeList />);
   await screen.findByText('CHG-2026-0042');
   const statusSelect = screen.getByLabelText('Filter by status');
   await userEvent.selectOptions(statusSelect, 'draft');
+  expect(await screen.findByText('CHG-2026-0041')).toBeInTheDocument();
   expect(screen.queryByText('CHG-2026-0042')).not.toBeInTheDocument();
-  expect(screen.getByText('CHG-2026-0041')).toBeInTheDocument();
 });
 
 test('shows Propose button for engineer on draft change', async () => {

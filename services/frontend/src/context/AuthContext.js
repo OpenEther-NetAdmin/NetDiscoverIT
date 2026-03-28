@@ -7,8 +7,10 @@ function decodeJwtPayload(token) {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload;
+    // JWT uses base64url — convert to standard base64 before decoding.
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
   } catch {
     return null;
   }
@@ -30,13 +32,15 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const data = await api.login(email, password);
-    setUser({ authenticated: true });
+    const payload = decodeJwtPayload(data.access_token);
+    setUser({ authenticated: true, role: payload?.role || 'viewer' });
     return data;
   };
 
   const register = async (email, password, fullName) => {
     const data = await api.register(email, password, fullName);
-    setUser({ authenticated: true });
+    const payload = decodeJwtPayload(data.access_token);
+    setUser({ authenticated: true, role: payload?.role || 'viewer' });
     return data;
   };
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { screen } from '@testing-library/react';
+import { Routes, Route } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import ChangeDrawer from '../pages/changes/ChangeDrawer';
 import { renderWithProviders, setAuthRole } from '../test-utils';
@@ -50,4 +51,22 @@ test('calls onClose when close button clicked', async () => {
   await screen.findByText('CHG-2026-0042');
   await userEvent.click(screen.getByLabelText('Close'));
   expect(onClose).toHaveBeenCalled();
+});
+
+test('expand button navigates to /changes/:id', async () => {
+  api.getChange.mockResolvedValue(MOCK_CHANGE);
+  api.getMspOverview.mockRejectedValue(new Error('403'));
+  setAuthRole('engineer');
+  renderWithProviders(
+    <>
+      <ChangeDrawer changeId="chg-uuid-1" isOpen={true} onClose={jest.fn()} />
+      <Routes>
+        <Route path="/changes/:id" element={<div>navigated to full page</div>} />
+      </Routes>
+    </>,
+    { initialPath: '/changes' }
+  );
+  await screen.findByText('CHG-2026-0042');
+  await userEvent.click(screen.getByLabelText('expand to full page'));
+  expect(await screen.findByText('navigated to full page')).toBeInTheDocument();
 });

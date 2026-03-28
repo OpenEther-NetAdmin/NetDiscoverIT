@@ -10,25 +10,7 @@ import { FiMaximize2, FiExternalLink, FiChevronDown, FiChevronUp, FiArrowLeft } 
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import TransitionModal from './TransitionModal';
-
-const LIFECYCLE_STEPS = ['draft', 'proposed', 'approved', 'implemented', 'verified'];
-
-const STATUS_COLORS = {
-  draft: 'gray', proposed: 'yellow', approved: 'green',
-  implemented: 'purple', verified: 'teal', rolled_back: 'red',
-};
-
-const RISK_COLORS = { low: 'green', medium: 'orange', high: 'red', critical: 'red' };
-
-function getActionForStatus(status, role) {
-  const isAdmin = ['admin', 'msp_admin'].includes(role);
-  const isEngineer = ['engineer', 'admin', 'msp_admin'].includes(role);
-  if (status === 'draft' && isEngineer) return 'propose';
-  if (status === 'proposed' && isAdmin) return 'approve';
-  if (status === 'approved' && isEngineer) return 'implement';
-  if (status === 'implemented' && isAdmin) return 'verify';
-  return null;
-}
+import { LIFECYCLE_STEPS, STATUS_COLORS, RISK_COLORS, getActionForStatus, canRollback } from './changeUtils';
 
 const LifecycleStepper = ({ status }) => {
   const currentIndex = LIFECYCLE_STEPS.indexOf(status);
@@ -134,7 +116,6 @@ const ChangeDetail = ({ id: propId, isDrawer = false }) => {
 
   const userRole = user?.role || 'viewer';
   const action = getActionForStatus(change.status, userRole);
-  const canRollback = ['admin', 'msp_admin'].includes(userRole) && !['verified', 'rolled_back'].includes(change.status);
 
   return (
     <Box p={isDrawer ? 4 : 6}>
@@ -277,7 +258,7 @@ const ChangeDetail = ({ id: propId, isDrawer = false }) => {
             {action.charAt(0).toUpperCase() + action.slice(1)}
           </Button>
         )}
-        {canRollback && (
+        {canRollback(userRole, change.status) && (
           <Button colorScheme="red" variant="outline" onClick={() => openAction('rollback')}>
             Rollback
           </Button>

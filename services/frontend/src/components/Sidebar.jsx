@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Box, VStack, Text, Icon, Flex, Select, Spinner } from '@chakra-ui/react';
+import { Box, VStack, Text, Icon, Flex, Select } from '@chakra-ui/react';
 import { FiGrid, FiServer, FiSearch, FiMap, FiSettings, FiClipboard } from 'react-icons/fi';
-import { useAuth } from '../context/AuthContext';
 import { useOrg } from '../context/OrgContext';
 
 const NavItem = ({ to, icon, children }) => (
@@ -28,16 +27,10 @@ const NavItem = ({ to, icon, children }) => (
 );
 
 const Sidebar = () => {
-  const { user } = useAuth();
-  const { activeOrg, managedOrgs, isMsp: isMspOrg, switchOrg } = useOrg();
-  const [loading, setLoading] = useState(true);
-  const isMsp = user?.role === 'msp_admin' || user?.role === 'msp_engineer';
-
-  useEffect(() => {
-    if (isMspOrg) {
-      setLoading(false);
-    }
-  }, [isMspOrg]);
+  // OrgContext owns MSP state — derived from getMspOverview() response, not user.role.
+  // This means the switcher appears iff the backend confirms MSP access, regardless of
+  // which MSP role the JWT carries (msp_admin or msp_viewer).
+  const { activeOrg, managedOrgs, isMsp, switchOrg } = useOrg();
 
   const handleOrgChange = (e) => {
     switchOrg(e.target.value);
@@ -54,25 +47,23 @@ const Sidebar = () => {
         </Text>
       </Box>
 
-      {isMsp && (
+      {isMsp && managedOrgs.length > 0 && (
         <Box px={4} mb={4}>
-          {loading ? (
-            <Spinner size="sm" />
-          ) : (
-            <Select
-              size="sm"
-              value={activeOrg?.id || ''}
-              onChange={handleOrgChange}
-              placeholder="Select org"
-              data-testid="org-switcher"
-            >
-              {managedOrgs.map(org => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </Select>
-          )}
+          <Text fontSize="9px" fontWeight="bold" color="gray.400" letterSpacing="wider" mb={1}>
+            ORG
+          </Text>
+          <Select
+            size="sm"
+            value={activeOrg?.id || ''}
+            onChange={handleOrgChange}
+            data-testid="org-switcher"
+          >
+            {managedOrgs.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </Select>
         </Box>
       )}
 

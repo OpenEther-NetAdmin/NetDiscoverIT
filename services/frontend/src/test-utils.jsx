@@ -17,7 +17,7 @@ export function setAuthRole(role = 'viewer') {
 
 export function renderWithProviders(ui, { initialPath = '/', ...renderOptions } = {}) {
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
+    <MemoryRouter initialEntries={[initialPath]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ChakraProvider>
         <AuthProvider>
           <OrgProvider>

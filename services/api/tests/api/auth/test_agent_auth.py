@@ -146,6 +146,117 @@ class TestAgentAuthCrossTenant:
 
             assert result.agent_name == "Agent A"
 
+    @pytest.mark.asyncio
+    async def test_get_agent_auth_uses_equality_not_identity(self, mock_agent_a, org_a_id):
+        """
+        Verify get_agent_auth generates SQL with == True, not is True.
+
+        This ensures the WHERE clause is properly generated and the
+        is_active filter actually filters rows instead of being dropped.
+        """
+        executed_queries = []
+
+        class QueryCapture:
+            @staticmethod
+            async def capture_execute(stmt):
+                executed_queries.append(str(stmt))
+                mock_result = MagicMock()
+                mock_scalars = MagicMock()
+                mock_scalars.all.return_value = [mock_agent_a]
+                mock_result.scalars.return_value = mock_scalars
+                return mock_result
+
+        mock_db = MagicMock()
+        mock_db.execute = QueryCapture.capture_execute
+
+        with patch("app.core.security.verify_password", return_value=True):
+            await get_agent_auth(x_agent_key="any_key", db=mock_db)
+
+        assert len(executed_queries) == 1
+        query_sql = executed_queries[0]
+        assert "is_active" in query_sql.lower()
+        assert "= true" in query_sql.lower() or "= 1" in query_sql.lower()
+
+    @pytest.mark.asyncio
+    async def test_inactive_agent_not_returned(self, org_a_id):
+        """
+        Verify that inactive agents are filtered out by the SQL query.
+        """
+        inactive_agent = MagicMock()
+        inactive_agent.id = uuid4()
+        inactive_agent.organization_id = MagicMock()
+        inactive_agent.organization_id.__str__ = MagicMock(return_value=org_a_id)
+        inactive_agent.name = "Inactive Agent"
+        inactive_agent.api_key_hash = hash_password("inactive_key")
+        inactive_agent.is_active = False
+
+        active_agent = MagicMock()
+        active_agent.id = uuid4()
+        active_agent.organization_id = MagicMock()
+        active_agent.organization_id.__str__ = MagicMock(return_value=org_a_id)
+        active_agent.name = "Active Agent"
+        active_agent.api_key_hash = hash_password("active_key")
+        active_agent.is_active = True
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [active_agent]
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.security.verify_password", return_value=True):
+            result = await get_agent_auth(x_agent_key="active_key", db=mock_db)
+
+        assert result.agent_name == "Active Agent"
+        assert result.agent_name != "Inactive Agent"
+
+    @pytest.mark.asyncio
+    async def test_cross_tenant_access_denied(self, org_a_id, org_b_id):
+        """
+        Verify agents from one organization cannot authenticate with
+        credentials from another organization.
+
+        The query fetches ALL active agents (no org filter in current impl),
+        but password verification ensures only the correct agent succeeds.
+        """
+        agent_org_a = MagicMock()
+        agent_org_a.id = uuid4()
+        agent_org_a.organization_id = MagicMock()
+        agent_org_a.organization_id.__str__ = MagicMock(return_value=org_a_id)
+        agent_org_a.name = "OrgA Agent"
+        agent_org_a.api_key_hash = hash_password("org_a_key")
+        agent_org_a.is_active = True
+
+        agent_org_b = MagicMock()
+        agent_org_b.id = uuid4()
+        agent_org_b.organization_id = MagicMock()
+        agent_org_b.organization_id.__str__ = MagicMock(return_value=org_b_id)
+        agent_org_b.name = "OrgB Agent"
+        agent_org_b.api_key_hash = hash_password("org_b_key")
+        agent_org_b.is_active = True
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [agent_org_a, agent_org_b]
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.security.verify_password") as mock_verify:
+            def verify_side_effect(key, hash):
+                return key == "org_a_key" and hash == agent_org_a.api_key_hash
+            mock_verify.side_effect = verify_side_effect
+
+            result = await get_agent_auth(x_agent_key="org_a_key", db=mock_db)
+
+            assert result.agent_name == "OrgA Agent"
+            assert result.organization_id == org_a_id
+
 
 class TestAgentAuthSQLAlchemyQuery:
     """

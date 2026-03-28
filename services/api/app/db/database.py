@@ -2,6 +2,7 @@
 PostgreSQL Database Connection
 """
 
+import asyncio
 import logging
 from typing import AsyncGenerator
 
@@ -41,12 +42,11 @@ async def init_db():
     from alembic import command
     from alembic.config import Config
 
-    # Configure Alembic
     alembic_cfg = Config("alembic.ini")
 
-    # Run migrations
     try:
-        await command.upgrade(alembic_cfg, "head")
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
         logger.info("Database migrations completed successfully")
     except Exception as e:
         logger.error(f"Database migration failed: {e}")

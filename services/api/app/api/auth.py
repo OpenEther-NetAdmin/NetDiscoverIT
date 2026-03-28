@@ -139,7 +139,9 @@ async def refresh_token(
         }
     )
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.post("/agent/register", response_model=AgentResponse)

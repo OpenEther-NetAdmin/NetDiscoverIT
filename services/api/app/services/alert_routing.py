@@ -89,7 +89,7 @@ class AlertRouter:
                     select(IntegrationConfig).where(
                         IntegrationConfig.id == integration_uuid,
                         IntegrationConfig.organization_id == org_uuid,
-                        IntegrationConfig.is_enabled is True,
+                        IntegrationConfig.is_enabled == True,
                     )
                 )
                 integration = config_result.scalar_one_or_none()

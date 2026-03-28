@@ -101,7 +101,7 @@ async def get_agent_auth(
 
     from app.core.security import verify_password
 
-    result = await db.execute(select(LocalAgent).where(LocalAgent.is_active is True))
+    result = await db.execute(select(LocalAgent).where(LocalAgent.is_active == True))
     agents = result.scalars().all()
 
     agent_context = None

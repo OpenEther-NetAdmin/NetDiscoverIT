@@ -96,7 +96,7 @@ async def detect_config_drift(
             select(AlertRule).where(
                 AlertRule.organization_id == org_uuid,
                 AlertRule.rule_type == "config_drift",
-                AlertRule.is_enabled is True,
+                AlertRule.is_enabled == True,
             )
         )
         alert_rule = alert_rule_result.scalar_one_or_none()
@@ -168,7 +168,7 @@ async def evaluate_alert_rules(
     rules_result = await db.execute(
         select(AlertRule).where(
             AlertRule.organization_id == org_uuid,
-            AlertRule.is_enabled is True,
+            AlertRule.is_enabled == True,
         )
     )
     rules = rules_result.scalars().all()
@@ -189,7 +189,7 @@ async def evaluate_alert_rules(
                 agents_result = await db.execute(
                     select(LocalAgent).where(
                         LocalAgent.organization_id == org_uuid,
-                        LocalAgent.is_active is True,
+                        LocalAgent.is_active == True,
                     )
                 )
                 agents = agents_result.scalars().all()
@@ -225,7 +225,7 @@ async def evaluate_alert_rules(
                 devices_result = await db.execute(
                     select(Device).where(
                         Device.organization_id == org_uuid,
-                        Device.is_active is True,
+                        Device.is_active == True,
                     )
                 )
                 devices = devices_result.scalars().all()

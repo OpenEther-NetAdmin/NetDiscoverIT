@@ -820,7 +820,7 @@ async def sync_change_to_ticket(
         select(IntegrationConfig).where(
             IntegrationConfig.organization_id == org_id,
             IntegrationConfig.integration_type == request.ticket_system,
-            IntegrationConfig.is_enabled is True,
+            IntegrationConfig.is_enabled == True,
         )
     )
     integration = integ_result.scalar_one_or_none()

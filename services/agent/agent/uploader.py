@@ -26,7 +26,7 @@ class VectorUploader:
 
         payload = {
             "batch_id": self._generate_batch_id(),
-            "customer_id": self._get_customer_id(),
+            "customer_id": await self._get_customer_id(),
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "devices": safe_devices,
             "recommendations_requested": False
@@ -132,7 +132,7 @@ class VectorUploader:
         from uuid import uuid4
         return str(uuid4())
     
-    def _get_customer_id(self) -> str:
+    async def _get_customer_id(self) -> str:
         """Get customer ID (organization_id) from local database"""
         try:
             import aiosqlite
@@ -140,21 +140,15 @@ class VectorUploader:
             
             db_path = os.getenv("AGENT_DB_PATH", "/app/data/agent.db")
             if os.path.exists(db_path):
-                import asyncio
-                
-                async def get_org_id():
-                    async with aiosqlite.connect(db_path) as db:
-                        db.row_factory = aiosqlite.Row
-                        async with db.execute(
-                            "SELECT organization_id FROM agents LIMIT 1"
-                        ) as cursor:
-                            row = await cursor.fetchone()
-                            return row["organization_id"] if row else None
-                
-                org_id = asyncio.run(get_org_id())
-                if org_id:
-                    return org_id
-        except Exception as logger:
+                async with aiosqlite.connect(db_path) as db:
+                    db.row_factory = aiosqlite.Row
+                    async with db.execute(
+                        "SELECT organization_id FROM agents LIMIT 1"
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row:
+                            return row["organization_id"]
+        except Exception:
             pass
         
         return "default-customer"

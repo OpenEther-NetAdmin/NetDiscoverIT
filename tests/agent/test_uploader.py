@@ -151,3 +151,40 @@ class TestUploadPayloadPrivacy:
                 "Config interface details found in upload - privacy leak!"
             assert "ip address 192.168" not in payload_str, \
                 "IP addresses found in upload - privacy leak!"
+
+
+class TestAsyncContext:
+    """Test that upload_vectors works correctly in async context"""
+
+    @pytest.fixture
+    def mock_config(self):
+        config = MagicMock()
+        config.API_ENDPOINT = "https://api.example.com"
+        config.API_KEY = "test-api-key"
+        return config
+
+    @pytest.fixture
+    def uploader(self, mock_config):
+        return VectorUploader(mock_config)
+
+    @pytest.mark.asyncio
+    async def test_upload_vectors_works_in_async_context(self, uploader):
+        """Verify upload_vectors does not raise RuntimeError when called from async context"""
+        devices = [
+            {
+                "device_id": "router-01",
+                "metadata": {"redaction_log": {}},
+                "vectors": [0.1, 0.2, 0.3]
+            }
+        ]
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"status": "ok"}
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            result = await uploader.upload_vectors(devices)
+            assert result == {"status": "ok"}

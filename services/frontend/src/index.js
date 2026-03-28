@@ -4,6 +4,8 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { AuthProvider } from './context/AuthContext';
+import { OrgProvider } from './context/OrgContext';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -21,7 +23,11 @@ root.render(
     <QueryClientProvider client={queryClient}>
       <ChakraProvider>
         <BrowserRouter>
-          <App />
+          <AuthProvider>
+            <OrgProvider>
+              <App />
+            </OrgProvider>
+          </AuthProvider>
         </BrowserRouter>
       </ChakraProvider>
     </QueryClientProvider>

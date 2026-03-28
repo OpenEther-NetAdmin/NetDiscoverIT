@@ -3,6 +3,11 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 class ApiService {
   constructor() {
     this.baseUrl = API_BASE_URL;
+    this.activeOrgId = null;
+  }
+
+  setActiveOrg(orgId) {
+    this.activeOrgId = orgId;
   }
 
   getToken() {
@@ -36,6 +41,10 @@ class ApiService {
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    if (this.activeOrgId) {
+      headers['X-Org-Id'] = this.activeOrgId;
     }
 
     try {
@@ -173,6 +182,54 @@ class ApiService {
 
   getPortalOverview() {
     return this.request('/api/v1/portal/overview');
+  }
+
+  getChanges(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.risk_level) params.set('risk_level', filters.risk_level);
+    const query = params.toString();
+    return this.request(`/api/v1/changes${query ? `?${query}` : ''}`);
+  }
+
+  getChange(id) {
+    return this.request(`/api/v1/changes/${id}`);
+  }
+
+  createChange(data) {
+    return this.request('/api/v1/changes', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  updateChange(id, data) {
+    return this.request(`/api/v1/changes/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  deleteChange(id) {
+    return this.request(`/api/v1/changes/${id}`, { method: 'DELETE' });
+  }
+
+  proposeChange(id) {
+    return this.request(`/api/v1/changes/${id}/propose`, { method: 'POST' });
+  }
+
+  approveChange(id, { notes = '' } = {}) {
+    return this.request(`/api/v1/changes/${id}/approve`, { method: 'POST', body: JSON.stringify({ notes }) });
+  }
+
+  implementChange(id, { implementation_evidence = '' } = {}) {
+    return this.request(`/api/v1/changes/${id}/implement`, { method: 'POST', body: JSON.stringify({ implementation_evidence }) });
+  }
+
+  verifyChange(id, { verification_results = '' } = {}) {
+    return this.request(`/api/v1/changes/${id}/verify`, { method: 'POST', body: JSON.stringify({ verification_results }) });
+  }
+
+  rollbackChange(id, { rollback_evidence = '' } = {}) {
+    return this.request(`/api/v1/changes/${id}/rollback`, { method: 'POST', body: JSON.stringify({ rollback_evidence }) });
+  }
+
+  getMspOverview() {
+    return this.request('/api/v1/msp/overview');
   }
 }
 

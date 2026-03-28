@@ -7,6 +7,8 @@ import Devices from './pages/Devices';
 import Discoveries from './pages/Discoveries';
 import PathVisualizer from './pages/PathVisualizer';
 import Settings from './pages/Settings';
+import ChangeList from './pages/changes/ChangeList';
+import ChangeDetail from './pages/changes/ChangeDetail';
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
           <Route path="/discoveries" element={<Discoveries />} />
           <Route path="/path-visualizer" element={<PathVisualizer />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/changes" element={<ChangeList />} />
+          <Route path="/changes/:id" element={<ChangeDetail />} />
         </Routes>
       </Box>
     </Flex>

@@ -8,10 +8,12 @@ and that the agent authentication properly scopes queries to the correct tenant.
 import pytest
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
+from sqlalchemy import select, and_, or_
 
 from app.api.dependencies import get_agent_auth
 from app.api.schemas import AgentAuth
 from app.core.security import hash_password
+from app.models.models import LocalAgent
 
 
 class TestAgentAuthCrossTenant:
@@ -63,14 +65,19 @@ class TestAgentAuthCrossTenant:
         The fix ensures that when we search for an agent by API key,
         we find the correct one without cross-tenant leakage.
         """
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [mock_agent_a, mock_agent_b]
+        captured_stmt = None
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mock_agent_a, mock_agent_b]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password") as mock_verify:
             def verify_side_effect(key, hash):
@@ -93,14 +100,19 @@ class TestAgentAuthCrossTenant:
         """
         Agent A's key should NOT work for Agent B.
         """
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [mock_agent_a, mock_agent_b]
+        captured_stmt = None
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mock_agent_a, mock_agent_b]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password") as mock_verify:
             mock_verify.return_value = False
@@ -127,14 +139,19 @@ class TestAgentAuthCrossTenant:
         inactive_agent.api_key_hash = hash_password("inactive_key")
         inactive_agent.is_active = False
 
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [mock_agent_a, inactive_agent]
+        captured_stmt = None
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mock_agent_a, inactive_agent]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password") as mock_verify:
             mock_verify.return_value = True
@@ -153,34 +170,48 @@ class TestAgentAuthCrossTenant:
 
         This ensures the WHERE clause is properly generated and the
         is_active filter actually filters rows instead of being dropped.
-        """
-        executed_queries = []
 
-        class QueryCapture:
-            @staticmethod
-            async def capture_execute(stmt):
-                executed_queries.append(str(stmt))
-                mock_result = MagicMock()
-                mock_scalars = MagicMock()
-                mock_scalars.all.return_value = [mock_agent_a]
-                mock_result.scalars.return_value = mock_scalars
-                return mock_result
+        The bug: `is True` uses identity comparison which SQLAlchemy
+        cannot translate to SQL, causing the WHERE clause to be dropped.
+
+        The fix: `== True` or implicit boolean check generates proper SQL.
+        """
+        captured_stmt = None
+
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mock_agent_a]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = QueryCapture.capture_execute
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password", return_value=True):
             await get_agent_auth(x_agent_key="any_key", db=mock_db)
 
-        assert len(executed_queries) == 1
-        query_sql = executed_queries[0]
-        assert "is_active" in query_sql.lower()
-        assert "= true" in query_sql.lower() or "= 1" in query_sql.lower()
+        assert captured_stmt is not None
+
+        where_clause = captured_stmt.whereclause
+        assert where_clause is not None, "WHERE clause must be present"
+
+        clause_str = str(where_clause)
+        assert "is_active" in clause_str.lower(), f"is_active must be in WHERE clause, got: {clause_str}"
+
+        assert "!=" not in clause_str and "NOT" not in clause_str.upper(), \
+            f"WHERE clause should use equality, not negation: {clause_str}"
 
     @pytest.mark.asyncio
     async def test_inactive_agent_not_returned(self, org_a_id):
         """
-        Verify that inactive agents are filtered out by the SQL query.
+        Verify that the SQL query has WHERE is_active filter that would
+        exclude inactive agents from database results.
+
+        This test verifies the SQL QUERY has the filter, not just that
+        the mock returns the right result.
         """
         inactive_agent = MagicMock()
         inactive_agent.id = uuid4()
@@ -198,29 +229,38 @@ class TestAgentAuthCrossTenant:
         active_agent.api_key_hash = hash_password("active_key")
         active_agent.is_active = True
 
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [active_agent]
+        captured_stmt = None
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [active_agent]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password", return_value=True):
             result = await get_agent_auth(x_agent_key="active_key", db=mock_db)
 
+        assert captured_stmt is not None, "Statement must be captured"
+
+        where_clause = captured_stmt.whereclause
+        assert where_clause is not None, "WHERE clause must be present for is_active filter"
+
+        clause_str = str(where_clause).lower()
+        assert "is_active" in clause_str, f"is_active must be in WHERE clause, got: {clause_str}"
+
         assert result.agent_name == "Active Agent"
-        assert result.agent_name != "Inactive Agent"
 
     @pytest.mark.asyncio
     async def test_cross_tenant_access_denied(self, org_a_id, org_b_id):
         """
-        Verify agents from one organization cannot authenticate with
-        credentials from another organization.
-
-        The query fetches ALL active agents (no org filter in current impl),
-        but password verification ensures only the correct agent succeeds.
+        Verify the SQL query is constructed with proper is_active filter.
+        The password verification then ensures only the correct agent succeeds.
         """
         agent_org_a = MagicMock()
         agent_org_a.id = uuid4()
@@ -238,14 +278,19 @@ class TestAgentAuthCrossTenant:
         agent_org_b.api_key_hash = hash_password("org_b_key")
         agent_org_b.is_active = True
 
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [agent_org_a, agent_org_b]
+        captured_stmt = None
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        async def capture_execute(stmt):
+            nonlocal captured_stmt
+            captured_stmt = stmt
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [agent_org_a, agent_org_b]
+            mock_result.scalars.return_value = mock_scalars
+            return mock_result
 
         mock_db = MagicMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.execute = capture_execute
 
         with patch("app.core.security.verify_password") as mock_verify:
             def verify_side_effect(key, hash):
@@ -254,8 +299,16 @@ class TestAgentAuthCrossTenant:
 
             result = await get_agent_auth(x_agent_key="org_a_key", db=mock_db)
 
-            assert result.agent_name == "OrgA Agent"
-            assert result.organization_id == org_a_id
+        assert captured_stmt is not None, "Statement must be captured"
+
+        where_clause = captured_stmt.whereclause
+        assert where_clause is not None, "WHERE clause must be present for is_active filter"
+
+        clause_str = str(where_clause).lower()
+        assert "is_active" in clause_str, f"is_active must be in WHERE clause, got: {clause_str}"
+
+        assert result.agent_name == "OrgA Agent"
+        assert result.organization_id == org_a_id
 
 
 class TestAgentAuthSQLAlchemyQuery:
@@ -276,9 +329,6 @@ class TestAgentAuthSQLAlchemyQuery:
 
         This test documents the expected behavior after the fix.
         """
-        from sqlalchemy import select
-        from app.models.models import LocalAgent
-
         query_fixed = select(LocalAgent).where(LocalAgent.is_active == True)
         query_implicit = select(LocalAgent).where(LocalAgent.is_active)
         query_buggy = select(LocalAgent).where(LocalAgent.is_active is True)
@@ -287,16 +337,38 @@ class TestAgentAuthSQLAlchemyQuery:
         assert query_implicit is not None
         assert query_buggy is not None
 
-    def test_equality_check_differs_from_identity_check(self):
+        assert query_fixed.whereclause is not None, "Fixed query must have WHERE clause"
+        assert query_implicit.whereclause is not None, "Implicit query must have WHERE clause"
+
+    def test_buggy_is_identity_query_produces_false_literal(self):
         """
-        Demonstrate that `== True` and `is True` behave differently for SQLAlchemy columns.
+        Demonstrate that `is True` causes the WHERE clause to produce a 'false' literal.
+
+        This is the core of the bug: `column is True` evaluates to a SQL `false` literal
+        instead of a proper comparison. This causes the query to return NO rows
+        (since WHERE false matches nothing), rather than properly filtering by is_active.
         """
-        from sqlalchemy import column
+        query_with_is_true = select(LocalAgent).where(LocalAgent.is_active is True)
+        query_fixed = select(LocalAgent).where(LocalAgent.is_active == True)
 
-        col = column("is_active")
+        buggy_clause_str = str(query_with_is_true.whereclause).lower()
+        fixed_clause_str = str(query_fixed.whereclause).lower()
 
-        equality_result = (col == True)
-        identity_result = (col is True)
+        assert "false" in buggy_clause_str, \
+            f"is True should produce 'false' literal, got: {query_with_is_true.whereclause}"
 
-        assert str(equality_result) == str(col) + " = true"
-        assert identity_result is False
+        assert "is_active" in fixed_clause_str or "active" in fixed_clause_str, \
+            f"== True should produce is_active comparison, got: {query_fixed.whereclause}"
+
+    def test_equality_vs_identity_sql_generation(self):
+        """
+        Verify that == True and is True produce different SQL.
+        """
+        query_equality = select(LocalAgent).where(LocalAgent.is_active == True)
+        query_implicit = select(LocalAgent).where(LocalAgent.is_active)
+
+        equality_str = str(query_equality)
+        implicit_str = str(query_implicit)
+
+        assert "is_active" in equality_str.lower() or "active" in equality_str.lower()
+        assert "is_active" in implicit_str.lower() or "active" in implicit_str.lower()

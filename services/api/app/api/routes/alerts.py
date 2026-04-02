@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 
 router = APIRouter()
 
@@ -18,7 +19,8 @@ router = APIRouter()
 # ALERTS
 # =============================================================================
 @router.get("/alerts/rules", response_model=List[schemas.AlertRuleResponse])
-async def list_alert_rules(
+@limiter.limit(LIMIT_READ)
+async def list_alert_rules(request: Request, 
     skip: int = 0,
     limit: int = 100,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -67,7 +69,8 @@ async def list_alert_rules(
 
 
 @router.get("/alerts/rules/{rule_id}", response_model=schemas.AlertRuleResponse)
-async def get_alert_rule(
+@limiter.limit(LIMIT_READ)
+async def get_alert_rule(request: Request, 
     rule_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -121,7 +124,8 @@ async def get_alert_rule(
 
 
 @router.post("/alerts/rules", response_model=schemas.AlertRuleResponse, status_code=201)
-async def create_alert_rule(
+@limiter.limit(LIMIT_WRITE)
+async def create_alert_rule(request: Request, 
     rule: schemas.AlertRuleCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -178,7 +182,8 @@ async def create_alert_rule(
 
 
 @router.patch("/alerts/rules/{rule_id}", response_model=schemas.AlertRuleResponse)
-async def update_alert_rule(
+@limiter.limit(LIMIT_WRITE)
+async def update_alert_rule(request: Request, 
     rule_id: str,
     rule_update: schemas.AlertRuleUpdate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -240,7 +245,8 @@ async def update_alert_rule(
 
 
 @router.delete("/alerts/rules/{rule_id}", status_code=204)
-async def delete_alert_rule(
+@limiter.limit(LIMIT_WRITE)
+async def delete_alert_rule(request: Request, 
     rule_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -283,7 +289,8 @@ async def delete_alert_rule(
 
 
 @router.get("/alerts/events", response_model=List[schemas.AlertEventResponse])
-async def list_alert_events(
+@limiter.limit(LIMIT_READ)
+async def list_alert_events(request: Request, 
     skip: int = 0,
     limit: int = 100,
     severity: Optional[str] = None,
@@ -344,7 +351,8 @@ async def list_alert_events(
 
 
 @router.get("/alerts/events/{event_id}", response_model=schemas.AlertEventResponse)
-async def get_alert_event(
+@limiter.limit(LIMIT_READ)
+async def get_alert_event(request: Request, 
     event_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -401,7 +409,8 @@ async def get_alert_event(
 @router.post(
     "/alerts/events/{event_id}/acknowledge", response_model=schemas.AlertEventResponse
 )
-async def acknowledge_alert_event(
+@limiter.limit(LIMIT_WRITE)
+async def acknowledge_alert_event(request: Request, 
     event_id: str,
     acknowledge: schemas.AlertEventAcknowledge,
     current_user: schemas.User = Depends(dependencies.get_current_user),

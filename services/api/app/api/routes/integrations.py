@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 
 router = APIRouter()
 
@@ -18,6 +19,7 @@ router = APIRouter()
 # INTEGRATION CONFIGS
 # =============================================================================
 @router.get("", response_model=List[schemas.IntegrationConfigResponse])
+@limiter.limit(LIMIT_READ)
 async def list_integrations(
     request: Request,
     skip: int = 0,
@@ -66,6 +68,7 @@ async def list_integrations(
 @router.get(
     "/{integration_id}", response_model=schemas.IntegrationConfigResponse
 )
+@limiter.limit(LIMIT_READ)
 async def get_integration(
     request: Request,
     integration_id: str,
@@ -119,6 +122,7 @@ async def get_integration(
 @router.post(
     "", response_model=schemas.IntegrationConfigResponse, status_code=201
 )
+@limiter.limit(LIMIT_WRITE)
 async def create_integration(
     request: Request,
     integration: schemas.IntegrationConfigCreate,
@@ -205,6 +209,7 @@ async def create_integration(
 @router.patch(
     "/{integration_id}", response_model=schemas.IntegrationConfigResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def update_integration(
     request: Request,
     integration_id: str,
@@ -288,6 +293,7 @@ async def update_integration(
 
 
 @router.delete("/{integration_id}", status_code=204)
+@limiter.limit(LIMIT_WRITE)
 async def delete_integration(
     request: Request,
     integration_id: str,
@@ -335,6 +341,7 @@ async def delete_integration(
     "/{integration_id}/test",
     response_model=schemas.IntegrationConfigTestResponse,
 )
+@limiter.limit(LIMIT_WRITE)
 async def test_integration(
     request: Request,
     integration_id: str,

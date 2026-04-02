@@ -1,12 +1,13 @@
 """Discovery routes"""
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_DISCOVERY_TRIGGER
 from app.models.models import Discovery
 from app.core.config import settings
 
@@ -14,7 +15,8 @@ router = APIRouter()
 
 
 @router.post("", response_model=schemas.Discovery)
-async def trigger_discovery(
+@limiter.limit(LIMIT_DISCOVERY_TRIGGER)
+async def trigger_discovery(request: Request, 
     discovery: schemas.DiscoveryCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -81,7 +83,8 @@ async def trigger_discovery(
 
 
 @router.get("/{discovery_id}", response_model=schemas.Discovery)
-async def get_discovery(
+@limiter.limit(LIMIT_READ)
+async def get_discovery(request: Request, 
     discovery_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),

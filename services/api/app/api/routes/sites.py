@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api import dependencies
-from app.api.dependencies import get_db, get_current_user, get_rate_limit
+from app.api.dependencies import get_db, get_current_user
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 from app.models.models import Site
 
 router = APIRouter()
@@ -35,7 +36,8 @@ def _site_response(site_obj: Site) -> schemas.SiteResponse:
 
 
 @router.get("", response_model=List[schemas.SiteResponse])
-async def list_sites(
+@limiter.limit(LIMIT_READ)
+async def list_sites(request: Request, 
     skip: int = 0,
     limit: int = 100,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -76,7 +78,8 @@ async def list_sites(
 
 
 @router.get("/{site_id}", response_model=schemas.SiteResponse)
-async def get_site(
+@limiter.limit(LIMIT_READ)
+async def get_site(request: Request, 
     site_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -118,7 +121,8 @@ async def get_site(
 
 
 @router.post("", response_model=schemas.SiteResponse, status_code=201)
-async def create_site(
+@limiter.limit(LIMIT_WRITE)
+async def create_site(request: Request, 
     site: schemas.SiteCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -155,7 +159,8 @@ async def create_site(
 
 
 @router.patch("/{site_id}", response_model=schemas.SiteResponse)
-async def update_site(
+@limiter.limit(LIMIT_WRITE)
+async def update_site(request: Request, 
     site_id: str,
     site_update: schemas.SiteUpdate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -205,7 +210,8 @@ async def update_site(
 
 
 @router.delete("/{site_id}", status_code=204)
-async def delete_site(
+@limiter.limit(LIMIT_WRITE)
+async def delete_site(request: Request, 
     site_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),

@@ -8,12 +8,13 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api.dependencies import get_current_user, get_db
+from app.api.rate_limit import limiter, LIMIT_REPORT_CREATE, LIMIT_READ
 from app.db.neo4j import get_neo4j_client
 from app.models.models import ExportDocument, Organization
 from app.services.compliance.report_service import generate_report
@@ -29,8 +30,9 @@ _FORMAT_TO_MIME = {
 
 
 @router.post("", response_model=schemas.ComplianceReportResponse, status_code=202)
-async def create_compliance_report(
-    request: schemas.ComplianceReportCreate,
+@limiter.limit(LIMIT_REPORT_CREATE)
+async def create_compliance_report(request: Request, 
+    report_create: schemas.ComplianceReportCreate,
     current_user: schemas.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -44,7 +46,7 @@ async def create_compliance_report(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if request.format == "both":
+    if report_create.format == "both":
         doc_ids = []
         for fmt in ("pdf", "docx"):
             doc = ExportDocument(
@@ -54,10 +56,10 @@ async def create_compliance_report(
                 format=fmt,
                 status="pending",
                 parameters={
-                    "framework": request.framework,
-                    "period_start": request.period_start.isoformat(),
-                    "period_end": request.period_end.isoformat(),
-                    "scope_override": request.scope_override,
+                    "framework": report_create.framework,
+                    "period_start": report_create.period_start.isoformat(),
+                    "period_end": report_create.period_end.isoformat(),
+                    "scope_override": report_create.scope_override,
                 },
             )
             db.add(doc)
@@ -70,18 +72,18 @@ async def create_compliance_report(
                 export_document_id=str(doc.id),
                 org_id=str(org_uuid),
                 org_name=org.name or str(org_uuid),
-                framework=request.framework,
+                framework=report_create.framework,
                 report_format=fmt,
-                period_start=request.period_start,
-                period_end=request.period_end,
+                period_start=report_create.period_start,
+                period_end=report_create.period_end,
                 neo4j_client=neo4j,
-                scope_override=request.scope_override,
+                scope_override=report_create.scope_override,
             ))
 
         return schemas.ComplianceReportResponse(
             id=doc_ids[0],
             status="pending",
-            framework=request.framework,
+            framework=report_create.framework,
             format="pdf",
         )
 
@@ -89,13 +91,13 @@ async def create_compliance_report(
         organization_id=org_uuid,
         requested_by=UUID(current_user.id),
         document_type="compliance_report",
-        format=request.format,
+        format=report_create.format,
         status="pending",
         parameters={
-            "framework": request.framework,
-            "period_start": request.period_start.isoformat(),
-            "period_end": request.period_end.isoformat(),
-            "scope_override": request.scope_override,
+            "framework": report_create.framework,
+            "period_start": report_create.period_start.isoformat(),
+            "period_end": report_create.period_end.isoformat(),
+            "scope_override": report_create.scope_override,
         },
     )
     db.add(doc)
@@ -107,25 +109,26 @@ async def create_compliance_report(
         export_document_id=str(doc.id),
         org_id=str(org_uuid),
         org_name=org.name or str(org_uuid),
-        framework=request.framework,
-        report_format=request.format,
-        period_start=request.period_start,
-        period_end=request.period_end,
+        framework=report_create.framework,
+        report_format=report_create.format,
+        period_start=report_create.period_start,
+        period_end=report_create.period_end,
         neo4j_client=neo4j,
-        scope_override=request.scope_override,
+        scope_override=report_create.scope_override,
     ))
 
     return schemas.ComplianceReportResponse(
         id=str(doc.id),
         status="pending",
-        framework=request.framework,
-        format=request.format,
+        framework=report_create.framework,
+        format=report_create.format,
         created_at=doc.created_at,
     )
 
 
 @router.get("/{report_id}", response_model=schemas.ComplianceReportResponse)
-async def get_compliance_report(
+@limiter.limit(LIMIT_READ)
+async def get_compliance_report(request: Request, 
     report_id: str,
     current_user: schemas.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -168,7 +171,8 @@ async def get_compliance_report(
 
 
 @router.get("", response_model=schemas.ComplianceReportListResponse)
-async def list_compliance_reports(
+@limiter.limit(LIMIT_READ)
+async def list_compliance_reports(request: Request, 
     status: str | None = None,
     framework: str | None = None,
     skip: int = 0,

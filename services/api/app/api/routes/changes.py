@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 from app.core.config import settings
 from app.services.change_service import VALID_TRANSITIONS, can_transition, generate_change_number
 
@@ -31,7 +32,8 @@ TRANSITION_ROLES = {
 
 
 @router.post("/changes", response_model=schemas.ChangeRecordResponse, status_code=201)
-async def create_change_record(
+@limiter.limit(LIMIT_WRITE)
+async def create_change_record(request: Request, 
     change: schemas.ChangeRecordCreate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -100,7 +102,8 @@ async def create_change_record(
 
 
 @router.get("/changes", response_model=schemas.ChangeRecordListResponse)
-async def list_change_records(
+@limiter.limit(LIMIT_READ)
+async def list_change_records(request: Request, 
     skip: int = 0,
     limit: int = 100,
     status: str | None = None,
@@ -195,7 +198,8 @@ async def list_change_records(
 
 
 @router.get("/changes/{change_id}", response_model=schemas.ChangeRecordResponse)
-async def get_change_record(
+@limiter.limit(LIMIT_READ)
+async def get_change_record(request: Request, 
     change_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -263,7 +267,8 @@ async def get_change_record(
 
 
 @router.patch("/changes/{change_id}", response_model=schemas.ChangeRecordResponse)
-async def update_change_record(
+@limiter.limit(LIMIT_WRITE)
+async def update_change_record(request: Request, 
     change_id: str,
     change_update: schemas.ChangeRecordUpdate,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -354,7 +359,8 @@ async def update_change_record(
 
 
 @router.delete("/changes/{change_id}", status_code=204)
-async def delete_change_record(
+@limiter.limit(LIMIT_WRITE)
+async def delete_change_record(request: Request, 
     change_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -406,6 +412,7 @@ async def delete_change_record(
 @router.post(
     "/changes/{change_id}/propose", response_model=schemas.ChangeRecordResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def propose_change(
     change_id: str,
     request: schemas.ChangeProposeRequest,
@@ -485,6 +492,7 @@ async def propose_change(
 @router.post(
     "/changes/{change_id}/approve", response_model=schemas.ChangeRecordResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def approve_change(
     change_id: str,
     request: schemas.ChangeApproveRequest,
@@ -566,6 +574,7 @@ async def approve_change(
 @router.post(
     "/changes/{change_id}/implement", response_model=schemas.ChangeRecordResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def implement_change(
     change_id: str,
     request: schemas.ChangeImplementRequest,
@@ -636,6 +645,7 @@ async def implement_change(
 
 
 @router.post("/changes/{change_id}/verify", response_model=schemas.ChangeRecordResponse)
+@limiter.limit(LIMIT_WRITE)
 async def verify_change(
     change_id: str,
     request: schemas.ChangeVerifyRequest,
@@ -709,6 +719,7 @@ async def verify_change(
 @router.post(
     "/changes/{change_id}/rollback", response_model=schemas.ChangeRecordResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def rollback_change(
     change_id: str,
     request: schemas.ChangeRollbackRequest,
@@ -785,6 +796,7 @@ async def rollback_change(
 @router.post(
     "/changes/{change_id}/sync-ticket", response_model=schemas.ChangeRecordResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def sync_change_to_ticket(
     change_id: str,
     request: schemas.ChangeSyncTicketRequest,
@@ -946,6 +958,7 @@ async def change_webhook(
 @router.post(
     "/changes/{change_id}/simulate", response_model=schemas.ChangeSimulateResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def trigger_simulation(
     change_id: str,
     request: schemas.ChangeSimulateRequest,
@@ -1030,7 +1043,8 @@ async def trigger_simulation(
     "/changes/{change_id}/simulation-results",
     response_model=schemas.ChangeRecordResponse,
 )
-async def get_simulation_results(
+@limiter.limit(LIMIT_READ)
+async def get_simulation_results(request: Request, 
     change_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),

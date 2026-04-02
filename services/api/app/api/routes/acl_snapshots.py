@@ -2,7 +2,7 @@
 ACL Snapshot routes — Compliance Vault
 """
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user, get_agent_auth
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 from app.models.models import ACLSnapshot
 
 router = APIRouter()
@@ -23,7 +24,9 @@ router = APIRouter()
     response_model=schemas.ACLSnapshotResponse,
     status_code=201,
 )
+@limiter.limit(LIMIT_WRITE)
 async def create_acl_snapshot(
+    request: Request,
     snapshot_data: schemas.ACLSnapshotCreate,
     db: AsyncSession = Depends(get_db),
     agent: schemas.AgentAuth = Depends(get_agent_auth),
@@ -74,7 +77,9 @@ async def create_acl_snapshot(
 
 
 @router.get("", response_model=schemas.ACLSnapshotListResponse)
+@limiter.limit(LIMIT_READ)
 async def list_acl_snapshots(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
     device_id: Optional[str] = None,
@@ -134,7 +139,9 @@ async def list_acl_snapshots(
 
 
 @router.get("/{snapshot_id}", response_model=schemas.ACLSnapshotResponse)
+@limiter.limit(LIMIT_READ)
 async def get_acl_snapshot(
+    request: Request,
     snapshot_id: str,
     current_user: schemas.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -176,7 +183,9 @@ async def get_acl_snapshot(
 
 
 @router.delete("/{snapshot_id}", status_code=204)
+@limiter.limit(LIMIT_WRITE)
 async def delete_acl_snapshot(
+    request: Request,
     snapshot_id: str,
     current_user: schemas.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -205,7 +214,9 @@ async def delete_acl_snapshot(
 @router.patch(
     "/{snapshot_id}", response_model=schemas.ACLSnapshotResponse
 )
+@limiter.limit(LIMIT_WRITE)
 async def update_acl_snapshot(
+    request: Request,
     snapshot_id: str,
     snapshot_data: schemas.ACLSnapshotUpdate,
     current_user: schemas.User = Depends(get_current_user),
@@ -252,4 +263,117 @@ async def update_acl_snapshot(
         created_at=snapshot.created_at,
     )
 
+
+@router.get("/{snapshot_id}/verify", response_model=schemas.ACLVerifyResult)
+@limiter.limit(LIMIT_READ)
+async def verify_acl_snapshot(
+    request: Request,
+    snapshot_id: str,
+    current_user: schemas.User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify the integrity of an ACL snapshot.
+
+    Checks performed:
+    - org ownership (user must have access to the snapshot's org)
+    - snapshot exists and is accessible
+    - content_hmac is present (HMAC integrity marker)
+    - config_hash_at_capture is present (configuration hash at capture time)
+    - plaintext_size_bytes is non-zero (blob is not empty)
+    """
+    try:
+        snapshot_uuid = UUID(snapshot_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid snapshot ID format")
+
+    result = await db.execute(
+        select(ACLSnapshot).where(ACLSnapshot.id == snapshot_uuid)
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="ACL snapshot not found")
+
+    try:
+        await dependencies.require_org_access(str(snapshot.organization_id), current_user, db)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this snapshot",
+        )
+
+    checks = {}
+    all_passed = True
+
+    checks["org_ownership"] = {
+        "passed": True,
+        "detail": f"Snapshot belongs to org {snapshot.organization_id}",
+    }
+
+    if snapshot.content_hmac:
+        checks["content_hmac_present"] = {
+            "passed": True,
+            "detail": "HMAC integrity marker is present",
+        }
+    else:
+        checks["content_hmac_present"] = {
+            "passed": False,
+            "detail": "HMAC integrity marker is missing — snapshot may have been tampered with",
+        }
+        all_passed = False
+
+    if snapshot.config_hash_at_capture:
+        checks["config_hash_present"] = {
+            "passed": True,
+            "detail": f"Config hash present: {snapshot.config_hash_at_capture[:12]}...",
+        }
+    else:
+        checks["config_hash_present"] = {
+            "passed": False,
+            "detail": "Config hash at capture is missing",
+        }
+        all_passed = False
+
+    if snapshot.plaintext_size_bytes and snapshot.plaintext_size_bytes > 0:
+        checks["non_empty_blob"] = {
+            "passed": True,
+            "detail": f"Blob size: {snapshot.plaintext_size_bytes} bytes",
+        }
+    else:
+        checks["non_empty_blob"] = {
+            "passed": False,
+            "detail": "Blob is empty or size is zero",
+        }
+        all_passed = False
+
+    if snapshot.key_id and snapshot.key_provider:
+        checks["key_info_present"] = {
+            "passed": True,
+            "detail": f"Key provider: {snapshot.key_provider}, key ID: {snapshot.key_id}",
+        }
+    else:
+        checks["key_info_present"] = {
+            "passed": False,
+            "detail": "Key ID or key provider is missing",
+        }
+        all_passed = False
+
+    if not all_passed:
+        failed_checks = [k for k, v in checks.items() if not v["passed"]]
+        checks["summary"] = {
+            "passed": False,
+            "detail": f"Verification failed. Failed checks: {', '.join(failed_checks)}",
+        }
+    else:
+        checks["summary"] = {
+            "passed": True,
+            "detail": "All verification checks passed",
+        }
+
+    return schemas.ACLVerifyResult(
+        snapshot_id=str(snapshot.id),
+        verified=all_passed,
+        checks=checks,
+    )
 

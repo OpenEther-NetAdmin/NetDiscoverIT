@@ -10,8 +10,13 @@ import pytest
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import select
+from starlette.requests import Request
 
 from app.models.models import User, Organization
+
+
+def noop_decorator(func):
+    return func
 
 
 class TestRegistrationCreatesOrganization:
@@ -61,10 +66,11 @@ class TestRegistrationCreatesOrganization:
         with patch("app.api.auth.dependencies.audit_log", new_callable=AsyncMock):
             with patch("app.api.auth.create_access_token") as mock_access:
                 with patch("app.api.auth.create_refresh_token") as mock_refresh:
-                    mock_access.return_value = "test_access_token"
-                    mock_refresh.return_value = "test_refresh_token"
+                    with patch("app.api.auth.limiter.limit", noop_decorator):
+                        mock_access.return_value = "test_access_token"
+                        mock_refresh.return_value = "test_refresh_token"
 
-                    result = await register(user_data, mock_db)
+                        result = await register(request=MagicMock(spec=Request), user_data=user_data, db=mock_db)
 
         assert len(added_objects) == 2, "Should add exactly 2 objects: Organization and User"
 
@@ -105,10 +111,11 @@ class TestRegistrationCreatesOrganization:
         with patch("app.api.auth.dependencies.audit_log", new_callable=AsyncMock):
             with patch("app.api.auth.create_access_token") as mock_access:
                 with patch("app.api.auth.create_refresh_token") as mock_refresh:
-                    mock_access.return_value = "test_token"
-                    mock_refresh.return_value = "test_refresh"
+                    with patch("app.api.auth.limiter.limit", noop_decorator):
+                        mock_access.return_value = "test_token"
+                        mock_refresh.return_value = "test_refresh"
 
-                    await register(user_data, mock_db)
+                        await register(request=MagicMock(spec=Request), user_data=user_data, db=mock_db)
 
         org_obj = added_objects[0]
         user_obj = added_objects[1]
@@ -145,10 +152,11 @@ class TestRegistrationCreatesOrganization:
         with patch("app.api.auth.dependencies.audit_log", new_callable=AsyncMock):
             with patch("app.api.auth.create_access_token") as mock_access:
                 with patch("app.api.auth.create_refresh_token") as mock_refresh:
-                    mock_access.return_value = "test_token"
-                    mock_refresh.return_value = "test_refresh"
+                    with patch("app.api.auth.limiter.limit", noop_decorator):
+                        mock_access.return_value = "test_token"
+                        mock_refresh.return_value = "test_refresh"
 
-                    await register(user_data, mock_db)
+                        await register(request=MagicMock(spec=Request), user_data=user_data, db=mock_db)
 
         org_obj = added_objects[0]
 
@@ -194,10 +202,11 @@ class TestRegistrationFKIntegrity:
         with patch("app.api.auth.dependencies.audit_log", new_callable=AsyncMock):
             with patch("app.api.auth.create_access_token") as mock_access:
                 with patch("app.api.auth.create_refresh_token") as mock_refresh:
-                    mock_access.return_value = "test_token"
-                    mock_refresh.return_value = "test_refresh"
+                    with patch("app.api.auth.limiter.limit", noop_decorator):
+                        mock_access.return_value = "test_token"
+                        mock_refresh.return_value = "test_refresh"
 
-                    await register(user_data, mock_db)
+                        await register(request=MagicMock(spec=Request), user_data=user_data, db=mock_db)
 
         org_obj = added_objects[0]
         user_obj = added_objects[1]

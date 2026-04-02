@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr
 from uuid import uuid4, UUID
 import secrets
@@ -14,6 +14,7 @@ from app.db.database import get_db
 from app.models.models import User, Organization, LocalAgent
 from app.api import dependencies
 from app.api.dependencies import get_current_user
+from app.api.rate_limit import limiter, LIMIT_AUTH_LOGIN, LIMIT_AUTH_REFRESH, LIMIT_AUTH_REGISTER
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -56,7 +57,8 @@ class AgentResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit(LIMIT_AUTH_LOGIN)
+async def login(request: Request, credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     """Login with email and password, returns access + refresh tokens"""
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalar_one_or_none()
@@ -104,12 +106,11 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(
-    request: RefreshTokenRequest, db: AsyncSession = Depends(get_db)
-):
+@limiter.limit(LIMIT_AUTH_REFRESH)
+async def refresh_token(request: Request, refresh_req: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     """Refresh access token using refresh token"""
     try:
-        payload = decode_token(request.refresh_token)
+        payload = decode_token(refresh_req.refresh_token)
         user_id = payload.get("sub")
 
         if not user_id:
@@ -145,7 +146,8 @@ async def refresh_token(
 
 
 @router.post("/agent/register", response_model=AgentResponse)
-async def register_agent(
+@limiter.limit(LIMIT_AUTH_REGISTER)
+async def register_agent(request: Request,
     agent_data: AgentCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -198,7 +200,8 @@ async def logout():
 @router.post(
     "/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
 )
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit(LIMIT_AUTH_REGISTER)
+async def register(request: Request, user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user"""
     result = await db.execute(select(User).where(User.email == user_data.email))
     existing_user = result.scalar_one_or_none()

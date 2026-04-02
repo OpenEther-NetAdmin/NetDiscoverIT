@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_current_user
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE
 from app.models.models import Device, AuditLog
 from app.services.role_classifier import RoleClassifier
 
@@ -44,6 +45,7 @@ def get_classifier() -> RoleClassifier:
 # Static routes first — must precede /{device_id} parametric routes
 # =============================================================================
 @router.post("/classify-batch")
+@limiter.limit(LIMIT_WRITE)
 async def batch_classify_devices(
     request: schemas.BatchClassifyRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -114,7 +116,8 @@ async def batch_classify_devices(
 # Parametric routes
 # =============================================================================
 @router.get("/", response_model=List[schemas.Device])
-async def list_devices(
+@limiter.limit(LIMIT_READ)
+async def list_devices(request: Request, 
     skip: int = 0,
     limit: int = 100,
     organization_id: Optional[str] = None,
@@ -140,6 +143,7 @@ async def list_devices(
 
 
 @router.post("/", response_model=schemas.Device, status_code=201)
+@limiter.limit(LIMIT_WRITE)
 async def create_device(
     request: Request,
     device: schemas.DeviceCreate,
@@ -175,7 +179,8 @@ async def create_device(
 
 
 @router.get("/{device_id}", response_model=schemas.Device)
-async def get_device(
+@limiter.limit(LIMIT_READ)
+async def get_device(request: Request, 
     device_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -215,6 +220,7 @@ async def get_device(
 
 
 @router.patch("/{device_id}", response_model=schemas.Device)
+@limiter.limit(LIMIT_WRITE)
 async def update_device(
     request: Request,
     device_id: str,
@@ -269,6 +275,7 @@ async def update_device(
 
 
 @router.delete("/{device_id}", status_code=204)
+@limiter.limit(LIMIT_WRITE)
 async def delete_device(
     request: Request,
     device_id: str,
@@ -309,7 +316,8 @@ async def delete_device(
 
 
 @router.post("/{device_id}/classify", response_model=schemas.DeviceClassificationResponse)
-async def classify_device(
+@limiter.limit(LIMIT_WRITE)
+async def classify_device(request: Request, 
     device_id: UUID,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(dependencies.get_db),
@@ -357,7 +365,8 @@ async def classify_device(
 
 
 @router.get("/{device_id}/classification")
-async def get_device_classification(
+@limiter.limit(LIMIT_READ)
+async def get_device_classification(request: Request, 
     device_id: UUID,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(dependencies.get_db),

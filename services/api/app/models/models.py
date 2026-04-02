@@ -216,6 +216,8 @@ class Device(Base):
     meta = Column("metadata", JSONB, default=dict)
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
     last_seen = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_active = Column(Boolean, default=True)
 
     # Site and agent assignment — which physical site and which local agent last collected this device

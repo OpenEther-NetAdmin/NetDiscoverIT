@@ -6,8 +6,6 @@ AI-powered network discovery and self-documenting platform
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
@@ -16,6 +14,7 @@ import logging
 from app.core.config import settings
 from app.api import routes
 from app.api.auth import router as auth_router
+from app.api.rate_limit import limiter
 
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()),
@@ -69,10 +68,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiter with default limits
-limiter = Limiter(
-    key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_READ]
-)
 app.state.limiter = limiter
 
 

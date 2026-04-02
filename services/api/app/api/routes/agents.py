@@ -2,7 +2,7 @@
 Agent routes — vector upload + agent CRUD
 """
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import schemas
 from app.api import dependencies
 from app.api.dependencies import get_db, get_agent_auth
+from app.api.rate_limit import limiter, LIMIT_READ, LIMIT_WRITE, LIMIT_AGENT_UPLOAD, LIMIT_AGENT_HEARTBEAT
 from app.models.models import LocalAgent, Device
 
 router = APIRouter()
 
 
 @router.post("/agent/vectors")
-async def receive_vectors(
+@limiter.limit(LIMIT_AGENT_UPLOAD)
+async def receive_vectors(request: Request, 
     vectors: schemas.VectorBatch,
     agent_context: dict = Depends(get_agent_auth),
     db: AsyncSession = Depends(get_db),
@@ -30,7 +32,8 @@ async def receive_vectors(
 
 
 @router.get("/agents", response_model=List[schemas.AgentResponse])
-async def list_agents(
+@limiter.limit(LIMIT_READ)
+async def list_agents(request: Request, 
     skip: int = 0,
     limit: int = 100,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -72,7 +75,8 @@ async def list_agents(
 
 
 @router.get("/agents/{agent_id}", response_model=schemas.AgentResponse)
-async def get_agent(
+@limiter.limit(LIMIT_READ)
+async def get_agent(request: Request, 
     agent_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -121,7 +125,8 @@ async def get_agent(
 @router.post(
     "/agents/{agent_id}/rotate-key", response_model=schemas.AgentRotateKeyResponse
 )
-async def rotate_agent_key(
+@limiter.limit(LIMIT_WRITE)
+async def rotate_agent_key(request: Request, 
     agent_id: str,
     current_user: schemas.User = Depends(dependencies.get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -169,7 +174,8 @@ async def rotate_agent_key(
 
 
 @router.post("/agents/{agent_id}/heartbeat", response_model=schemas.HeartbeatResponse)
-async def agent_heartbeat(
+@limiter.limit(LIMIT_AGENT_HEARTBEAT)
+async def agent_heartbeat(request: Request, 
     agent_id: str,
     heartbeat: schemas.HeartbeatRequest,
     agent_auth: schemas.AgentAuth = Depends(dependencies.get_agent_auth),
@@ -225,9 +231,10 @@ async def agent_heartbeat(
     response_model=schemas.AgentUploadResponse,
     dependencies=[Depends(dependencies.get_agent_auth)],
 )
-async def upload_agent_data(
+@limiter.limit(LIMIT_AGENT_UPLOAD)
+async def upload_agent_data(request: Request, 
     agent_id: str,
-    request: schemas.AgentUploadRequest,
+    upload_data: schemas.AgentUploadRequest,
     db: AsyncSession = Depends(get_db),
     agent_auth: dict = Depends(dependencies.get_agent_auth),
 ):
@@ -245,7 +252,7 @@ async def upload_agent_data(
     updated = 0
     errors = []
 
-    for device_data in request.devices:
+    for device_data in upload_data.devices:
         try:
             existing = None
             if device_data.ip_address:

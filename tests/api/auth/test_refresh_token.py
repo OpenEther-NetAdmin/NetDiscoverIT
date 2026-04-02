@@ -9,8 +9,13 @@ a function object instead of a token string because the endpoint function was na
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+from starlette.requests import Request
 
 from app.models.models import User
+
+
+def noop_decorator(func):
+    return func
 
 
 class TestRefreshTokenReturnsString:
@@ -65,8 +70,10 @@ class TestRefreshTokenReturnsString:
             from app.api.auth import refresh_token
             from app.api.auth import RefreshTokenRequest
 
-            request = RefreshTokenRequest(refresh_token="valid_refresh_token")
-            response = await refresh_token(request=request, db=mock_db)
+            mock_request = MagicMock(spec=Request)
+            with patch("app.api.auth.limiter.limit", noop_decorator):
+                request = RefreshTokenRequest(refresh_token="valid_refresh_token")
+                response = await refresh_token(request=mock_request, refresh_req=request, db=mock_db)
 
             assert isinstance(response, TokenResponse)
             assert response.refresh_token == "test_refresh_token_string"
@@ -94,10 +101,13 @@ class TestRefreshTokenReturnsString:
 
             from app.api.auth import refresh_token, RefreshTokenRequest
 
-            result = await refresh_token(
-                request=RefreshTokenRequest(refresh_token="some_token"),
-                db=mock_db
-            )
+            mock_request = MagicMock(spec=Request)
+            with patch("app.api.auth.limiter.limit", noop_decorator):
+                result = await refresh_token(
+                    request=mock_request,
+                    refresh_req=RefreshTokenRequest(refresh_token="some_token"),
+                    db=mock_db
+                )
 
             assert not hasattr(result.refresh_token, "__call__"), \
                 "refresh_token should not be callable - it should be a string"

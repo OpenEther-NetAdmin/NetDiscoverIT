@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import AgentAuth, User
 from app.core.config import settings
 from app.core.security import decode_token
-from app.models.models import AuditLog, LocalAgent, User as UserModel
+from app.models.models import AuditLog, LocalAgent, User as UserModel, UserOrgAccess
 
 from app.db.database import get_db
 
@@ -75,6 +75,45 @@ async def get_current_active_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive",
         )
+    return current_user
+
+
+async def require_org_access(
+    organization_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Verify the current user has access to the specified organization.
+
+    Authorization rules:
+      1. user.organization_id == requested_org_id  → allow (home org access)
+      2. UserOrgAccess(user_id, organization_id=requested_org_id) exists → allow
+      3. Otherwise → 403
+    """
+    if current_user.organization_id == organization_id:
+        return current_user
+
+    result = await db.execute(
+        select(UserOrgAccess).where(
+            UserOrgAccess.user_id == UUID(current_user.id),
+            UserOrgAccess.organization_id == UUID(organization_id),
+        )
+    )
+    access = result.scalar_one_or_none()
+
+    if access is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this organization",
+        )
+
+    if access.expires_at is not None and access.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your access to this organization has expired",
+        )
+
     return current_user
 
 

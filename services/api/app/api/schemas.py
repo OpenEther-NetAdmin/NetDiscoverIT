@@ -84,8 +84,8 @@ class TokenResponse(BaseModel):
 class DeviceBase(BaseModel):
     """Base device schema"""
 
-    hostname: str
-    management_ip: str
+    hostname: Optional[str] = None
+    management_ip: Optional[str] = None
     vendor: Optional[str] = None
     device_type: Optional[str] = None
     role: Optional[str] = None
@@ -778,6 +778,13 @@ class ACLSnapshotListResponse(BaseModel):
     limit: int
 
 
+class ACLVerifyResult(BaseModel):
+    """Result of an ACL snapshot verification check"""
+    snapshot_id: str
+    verified: bool
+    checks: dict
+
+
 # ---------------------------------------------------------------------------
 # NLI / RAG schemas
 # ---------------------------------------------------------------------------
@@ -879,3 +886,44 @@ class TopologyResponse(BaseModel):
     edges: List[TopologyEdge]
     node_count: int
     edge_count: int
+
+
+class UserOrgAccessCreate(BaseModel):
+    """Grant a user access to an organization"""
+    user_id: str
+    organization_id: str
+    access_role: str = "read_only"
+
+
+class UserOrgAccessUpdate(BaseModel):
+    """Update a user's org access"""
+    access_role: str | None = None
+    expires_at: datetime | None = None
+
+
+class UserOrgAccessResponse(BaseModel):
+    """UserOrgAccess response"""
+    id: str
+    user_id: str
+    organization_id: str
+    access_role: str
+    granted_by: str | None = None
+    granted_at: datetime
+    expires_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class UserOrgAccessListResponse(BaseModel):
+    """Paginated UserOrgAccess list"""
+    items: list[UserOrgAccessResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class PortalOverviewMSP(PortalOverview):
+    """MSP aggregate portal overview across child orgs"""
+    child_orgs_total_devices: int = 0
+    child_orgs_total_alerts: int = 0
+    child_orgs_open_alerts: int = 0

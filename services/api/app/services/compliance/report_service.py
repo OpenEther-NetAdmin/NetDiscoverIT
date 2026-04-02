@@ -71,7 +71,7 @@ async def generate_report(
                 renderer = DOCXRenderer()
                 file_bytes = renderer.render(analysis, org_name=org_name)
 
-            filename = f"compliance-{framework}-{period_start.strftime('%Y%m%d')}.{_EXT[report_format]}"
+            filename = f"compliance-{framework}-{period_start.strftime('%Y%m%d')}.{_EXT.get(report_format, 'bin')}"
             storage_path = storage_service.upload_file(
                 org_id=org_id,
                 filename=filename,

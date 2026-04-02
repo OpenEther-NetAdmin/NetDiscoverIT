@@ -8,12 +8,13 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import schemas
 from app.api.dependencies import get_current_user, get_db
+from app.api.rate_limit import limiter, LIMIT_READ
 from app.db.neo4j import get_neo4j_client
 from app.models.models import Device
 
@@ -37,7 +38,8 @@ def _device_type(role: str | None) -> str:
 
 
 @router.get("", response_model=schemas.TopologyResponse)
-async def get_topology(
+@limiter.limit(LIMIT_READ)
+async def get_topology(request: Request, 
     current_user: schemas.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

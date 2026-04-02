@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import dependencies, schemas
 from app.api.dependencies import get_current_user, get_db
+from app.api.rate_limit import limiter, LIMIT_NLI
 from app.core.config import settings
 from app.db.neo4j import get_neo4j_client
 
@@ -29,6 +30,7 @@ def get_nli_service():
 
 
 @router.post("", response_model=schemas.NLIResponse)
+@limiter.limit(LIMIT_NLI)
 async def natural_language_query(
     request: Request,
     query: schemas.NLIQuery,

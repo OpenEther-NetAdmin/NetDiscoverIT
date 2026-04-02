@@ -58,13 +58,14 @@ class TestUploadPayloadPrivacy:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"status": "ok"}
-            mock_instance = AsyncMock()
-            mock_instance.post.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             await uploader.upload_vectors(devices)
 
-            uploaded_payload = mock_instance.post.call_args.kwargs["json"]
+            call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+            uploaded_payload = call_args.kwargs["json"]
 
             for device in uploaded_payload["devices"]:
                 metadata = device.get("metadata", {})
@@ -84,13 +85,14 @@ class TestUploadPayloadPrivacy:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"status": "ok"}
-            mock_instance = AsyncMock()
-            mock_instance.post.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             await uploader.upload_vectors(devices)
 
-            uploaded_payload = mock_instance.post.call_args.kwargs["json"]
+            call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+            uploaded_payload = call_args.kwargs["json"]
 
             for device in uploaded_payload["devices"]:
                 metadata = device.get("metadata", {})
@@ -109,13 +111,14 @@ class TestUploadPayloadPrivacy:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"status": "ok"}
-            mock_instance = AsyncMock()
-            mock_instance.post.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             await uploader.upload_vectors(devices)
 
-            uploaded_payload = mock_instance.post.call_args.kwargs["json"]
+            call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+            uploaded_payload = call_args.kwargs["json"]
 
             for device in uploaded_payload["devices"]:
                 metadata = device.get("metadata", {})
@@ -138,13 +141,14 @@ class TestUploadPayloadPrivacy:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"status": "ok"}
-            mock_instance = AsyncMock()
-            mock_instance.post.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             await uploader.upload_vectors(devices)
 
-            uploaded_payload = mock_instance.post.call_args.kwargs["json"]
+            call_args = mock_client.return_value.__aenter__.return_value.post.call_args
+            uploaded_payload = call_args.kwargs["json"]
             payload_str = str(uploaded_payload)
 
             assert "GigabitEthernet" not in payload_str, \
@@ -182,9 +186,9 @@ class TestAsyncContext:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"status": "ok"}
-            mock_instance = AsyncMock()
-            mock_instance.post.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             result = await uploader.upload_vectors(devices)
             assert result == {"status": "ok"}

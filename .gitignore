@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 
 # Local virtual environments
+venv/
+.venv/
 services/api/.venv/
 services/frontend/node_modules/
 

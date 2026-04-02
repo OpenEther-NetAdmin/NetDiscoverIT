@@ -111,6 +111,9 @@ services:
         condition: service_healthy
     volumes:
       - ./services/api:/app
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+      - ./services/agent/agent:/app/agent
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # =============================================================================

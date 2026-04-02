@@ -1,5 +1,5 @@
 import pytest
-from agent.agent.vectorizer import DeviceVectorizer
+from agent.vectorizer import DeviceVectorizer
 
 class TestVectorizerDimensions:
     @pytest.fixture

@@ -10,9 +10,6 @@
 # =============================================================================
 COMPOSE := docker compose
 COMPOSE_PROD := docker compose -f docker-compose.prod.yml
-PYTHON := python3
-PIP := pip3
-NODE := node
 NPM := npm
 
 # Colors
@@ -39,7 +36,6 @@ help:
 	@echo "  $(YELLOW)clean$(NC)           - Clean up containers and volumes"
 	@echo "  $(YELLOW)rebuild$(NC)         - Rebuild Docker images"
 	@echo ""
-	@echo "  $(YELLOW)install-deps$(NC)    - Install Python dependencies"
 	@echo "  $(YELLOW)install-node-deps$(NC) - Install Node dependencies"
 	@echo ""
 	@echo "  $(YELLOW)test$(NC)            - Run tests"
@@ -113,26 +109,23 @@ db-backup:
 # =============================================================================
 # DEVELOPMENT
 # =============================================================================
-install-deps:
-	$(PIP) install -r services/api/requirements.txt
-
 install-node-deps:
 	cd services/frontend && $(NPM) install
 
 test:
-	pytest tests/ -v
+	$(COMPOSE) exec api pytest tests/ -v
 
 test-cov:
-	pytest tests/ --cov=services/api --cov-report=html --cov-report=term
+	$(COMPOSE) exec api pytest tests/ --cov=app --cov-report=html --cov-report=term
 
 lint:
-	flake8 services/api --max-line-length=120 --ignore=E501,W503
-	black --check services/api
-	cd services/frontend && npm run lint
+	$(COMPOSE) exec api flake8 app --max-line-length=120 --ignore=E501,W503
+	$(COMPOSE) exec api black --check app
+	$(COMPOSE) exec frontend npm run lint
 
 format:
-	black services/api
-	cd services/frontend && npm run format
+	$(COMPOSE) exec api black app
+	$(COMPOSE) exec frontend npm run format
 
 # =============================================================================
 # SHELLS

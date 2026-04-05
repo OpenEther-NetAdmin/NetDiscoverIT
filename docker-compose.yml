@@ -114,6 +114,7 @@ services:
       - ./tests:/app/tests
       - ./pytest.ini:/app/pytest.ini
       - ./services/agent/agent:/app/agent
+      - ./services/common:/app/services/common
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # =============================================================================

@@ -9,6 +9,7 @@ from typing import Dict
 
 from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
 from agent.sanitizer import ConfigSanitizer
+from services.common.normalization.schemas import NormalizedCommandOutput
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class ConfigNormalizer:
         """
         result = self._sanitizer.sanitize(raw_config)
         if isinstance(result, dict):
-            return result.get("sanitized_config", raw_config)
+            return result.get("sanitized", result.get("sanitized_config", raw_config))
         return result
     
     async def normalize(self, raw_config: str) -> Dict:
@@ -265,3 +266,87 @@ Output valid JSON only, no explanations:"""
             vlans.append({"id": vlan_id, "name": name})
         
         return vlans
+
+
+def normalize_command_output(
+    vendor: str,
+    command: str,
+    raw_output: str,
+    strict: bool = False
+) -> NormalizedCommandOutput:
+    """Orchestrate normalization of command output.
+    
+    Entry point that routes through TextFSM parser first, then falls back
+    to rule-based parsing if no template is available.
+    
+    Args:
+        vendor: Vendor key (e.g., "cisco_ios", "juniper_junos")
+        command: Command that was executed (e.g., "show version")
+        raw_output: Raw command output text
+        strict: If True, fail on parse errors instead of falling back
+        
+    Returns:
+        NormalizedCommandOutput with parsed records and metadata
+    """
+    parser = TextFSMParser()
+    
+    result = NormalizedCommandOutput(
+        vendor=vendor,
+        command=command,
+        records=[],
+        parser_method="fallback",
+        parser_status="fallback",
+        fallback_reason="No template available"
+    )
+    
+    try:
+        parsed = parser.parse(raw_output, vendor)
+        
+        if parsed and parsed.get("_normalization_method") == "textfsm":
+            records = [{k: v for k, v in parsed.items() if not k.startswith("_")}]
+            
+            result.records = records
+            result.parser_method = "textfsm"
+            result.parser_status = "success"
+            result.fallback_reason = None
+            result.template_name = parsed.get("_template_name")
+            
+            return result
+    except Exception as e:
+        logger.warning(f"TextFSM parsing failed for {vendor}/{command}: {e}")
+        if strict:
+            result.parser_status = "error"
+            result.warnings.append(str(e))
+            return result
+    
+    fallback_records = _fallback_parse(raw_output, vendor)
+    result.records = fallback_records
+    result.parser_method = "fallback"
+    result.parser_status = "fallback"
+    result.fallback_reason = "TextFSM template not available or parsing failed"
+    
+    return result
+
+
+def _fallback_parse(raw_output: str, vendor: str) -> list:
+    """Simple fallback parser when TextFSM is unavailable."""
+    import re
+    
+    records = []
+    record = {}
+    
+    hostname_match = re.search(r"hostname\s+(\S+)", raw_output, re.IGNORECASE)
+    if hostname_match:
+        record["hostname"] = hostname_match.group(1)
+    
+    version_match = re.search(r"version\s+([\d\.\(\)]+)", raw_output, re.IGNORECASE)
+    if version_match:
+        record["version"] = version_match.group(1)
+    
+    if record:
+        record["vendor"] = vendor
+        records.append(record)
+    else:
+        records.append({"raw_snippet": raw_output[:500], "vendor": vendor})
+    
+    return records

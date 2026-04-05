@@ -16,10 +16,17 @@ FIXTED_USER_ID = "00000000-0000-0000-0000-000000000002"
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_data():
-    """Set up test organization and user in database once for all tests"""
-    import asyncio
-    from app.db.database import engine
-    from sqlalchemy import text
+    """Set up test organization and user in database once for all tests.
+    
+    Only runs if API database modules are available (skips for agent-only tests).
+    """
+    try:
+        import asyncio
+        from app.db.database import engine
+        from sqlalchemy import text
+    except ImportError:
+        yield
+        return
     
     async def _setup():
         async with engine.connect() as conn:

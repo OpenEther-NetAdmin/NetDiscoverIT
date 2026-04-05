@@ -14,6 +14,15 @@ from services.common.normalization.schemas import NormalizedCommandOutput
 
 logger = logging.getLogger(__name__)
 
+_TEXTFSM_PARSER: "TextFSMParser | None" = None
+
+
+def _get_parser() -> "TextFSMParser":
+    global _TEXTFSM_PARSER
+    if _TEXTFSM_PARSER is None:
+        _TEXTFSM_PARSER = TextFSMParser()
+    return _TEXTFSM_PARSER
+
 
 class ConfigNormalizer:
     """Normalizes vendor configs to JSON"""
@@ -300,7 +309,7 @@ def normalize_command_output(
     Returns:
         NormalizedCommandOutput with parsed records and metadata
     """
-    parser = TextFSMParser()
+    parser = _get_parser()
     
     result = NormalizedCommandOutput(
         vendor=vendor,

@@ -34,7 +34,7 @@ class TestNormalizeCommandOutput:
         
         assert result.vendor == "cisco_ios"
         assert result.command == "show version"
-        assert result.parser_method in {"textfsm", "fallback", "strict"}
+        assert result.parser_method in {"textfsm", "fallback"}
         assert result.schema_version == "1.0"
 
     def test_normalize_command_output_returns_textfsm_on_success(self):
@@ -127,7 +127,8 @@ class TestNormalizeCommandOutput:
                 raw_output="Cisco IOS Software"
             )
             
-            assert result.template_name is not None or result.parser_method == "textfsm"
+            assert result.template_name == "cisco_ios_show_version.textfsm"
+            assert result.parser_method == "textfsm"
 
     def test_fallback_result_contains_no_raw_config(self):
         """Raw config text must never appear in normalized output"""
@@ -141,3 +142,30 @@ class TestNormalizeCommandOutput:
         for record in result.records:
             assert "raw_config" not in record, "raw_config key must not appear in normalized output"
             assert "raw_snippet" not in record, "raw_snippet key must not appear in normalized output"
+
+
+def test_normalize_command_output_reuses_parser_instance():
+    """normalize_command_output must reuse the module-level TextFSMParser, not create a new one."""
+    from agent import normalizer as norm_module
+    from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
+
+    init_call_count = []
+    original_init = TextFSMParser.__init__
+
+    def counting_init(self, *args, **kwargs):
+        init_call_count.append(1)
+        original_init(self, *args, **kwargs)
+
+    with patch.object(TextFSMParser, "__init__", counting_init):
+        norm_module._TEXTFSM_PARSER = None
+        norm_module.normalize_command_output(
+            vendor="cisco_ios", command="show version", raw_output="test"
+        )
+        norm_module.normalize_command_output(
+            vendor="cisco_ios", command="show version", raw_output="test"
+        )
+
+    assert len(init_call_count) <= 1, (
+        f"TextFSMParser.__init__ called {len(init_call_count)} times — "
+        "should be created once and reused"
+    )

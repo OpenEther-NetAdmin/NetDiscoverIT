@@ -10,7 +10,7 @@ class NormalizedCommandOutput(BaseModel):
     vendor: str
     command: str
     records: list[dict[str, Any]] = Field(default_factory=list)
-    parser_method: Literal["textfsm", "fallback", "strict"]
+    parser_method: Literal["textfsm", "fallback"]
     template_name: str | None = None
     template_source: str | None = None
     parser_status: Literal["success", "partial", "fallback", "error"] = "success"

@@ -140,6 +140,4 @@ class TestNormalizeCommandOutput:
         )
         for record in result.records:
             assert "raw_config" not in record, "raw_config key must not appear in normalized output"
-            assert "raw_snippet" not in record or record.get("raw_snippet") is None or \
-                   "supersecret" not in str(record.get("raw_snippet", "")), \
-                   "Raw config content must not propagate"
+            assert "raw_snippet" not in record, "raw_snippet key must not appear in normalized output"

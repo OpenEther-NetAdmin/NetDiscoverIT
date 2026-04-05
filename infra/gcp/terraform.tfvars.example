@@ -1,0 +1,8 @@
+# infra/gcp/terraform.tfvars.example
+# Copy to terraform.tfvars and fill in your values
+
+project_id   = "your-gcp-project-id"
+region       = "us-central1"
+zone         = "us-central1-a"
+ssh_username = "your-gcp-username"
+ssh_pub_key  = "ssh-rsa AAAA..."

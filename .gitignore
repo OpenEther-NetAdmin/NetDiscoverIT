@@ -7,7 +7,11 @@ __pycache__/
 venv/
 .venv/
 services/api/.venv/
+
+# Agent and package build artifacts
 services/frontend/node_modules/
+services/api/agent/
+services/agent/agent/__pycache__
 
 # Git worktrees
 .worktrees/
@@ -15,4 +19,8 @@ services/frontend/node_modules/
 
 # IDE / editor config
 .kilo/
+.kilocode/
+.kilocodemodes
 .env
+.claude/
+.vscode/

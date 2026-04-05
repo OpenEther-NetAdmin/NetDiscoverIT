@@ -85,7 +85,7 @@ class ApiService {
     if (!refreshToken) return false;
 
     try {
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -104,7 +104,7 @@ class ApiService {
   }
 
   async login(email, password) {
-    const response = await fetch(`${this.baseUrl}/auth/login`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -121,7 +121,7 @@ class ApiService {
   }
 
   async register(email, password, fullName) {
-    const response = await fetch(`${this.baseUrl}/auth/register`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, full_name: fullName }),

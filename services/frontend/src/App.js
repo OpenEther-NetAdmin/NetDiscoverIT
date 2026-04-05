@@ -1,7 +1,11 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Box, Flex, Spinner, Center } from '@chakra-ui/react';
+import { useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
 import Discoveries from './pages/Discoveries';
@@ -21,22 +25,117 @@ const PageLoader = () => (
 );
 
 function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Center h="100vh">
+        <Spinner size="xl" color="blue.500" />
+      </Center>
+    );
+  }
+
   return (
     <Flex h="100vh">
-      <Sidebar />
+      {user && <Sidebar />}
       <Box flex="1" overflow="auto" bg="gray.50">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/portal" element={<Dashboard />} />
-          <Route path="/devices" element={<Devices />} />
-          <Route path="/discoveries" element={<Discoveries />} />
-          <Route path="/path-visualizer" element={<PathVisualizer />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/changes" element={<ChangeList />} />
-          <Route path="/changes/:id" element={<ChangeDetail />} />
-          <Route path="/topology" element={<Suspense fallback={<PageLoader />}><TopologyMap /></Suspense>} />
-          <Route path="/compliance" element={<Suspense fallback={<PageLoader />}><ComplianceViewer /></Suspense>} />
-          <Route path="/assistant" element={<Suspense fallback={<PageLoader />}><AssistantPage /></Suspense>} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portal"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/devices"
+            element={
+              <ProtectedRoute>
+                <Devices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/discoveries"
+            element={
+              <ProtectedRoute>
+                <Discoveries />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/path-visualizer"
+            element={
+              <ProtectedRoute>
+                <PathVisualizer />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/changes"
+            element={
+              <ProtectedRoute>
+                <ChangeList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/changes/:id"
+            element={
+              <ProtectedRoute>
+                <ChangeDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/topology"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <TopologyMap />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compliance"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ComplianceViewer />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/assistant"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AssistantPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </Box>
     </Flex>

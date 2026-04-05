@@ -317,6 +317,7 @@ class Discovery(Base):
     )
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     name = Column(String(255), nullable=False)
+    discovery_type = Column(String(50), default="full")
     description = Column(Text)
     targets = Column(JSONB, nullable=False)  # Target networks/hosts
     scan_profile = Column(String(50), default="standard")  # standard, quick, deep

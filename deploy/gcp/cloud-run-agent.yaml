@@ -1,0 +1,55 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: netdiscoverit-agent
+  labels:
+    app: netdiscoverit
+    component: agent
+spec:
+  template:
+    spec:
+      parallelism: 1
+      completions: 1
+      timeoutSeconds: 3600
+      template:
+        spec:
+          containers:
+            - name: agent
+              image: REGION-docker.pkg.dev/PROJECT_ID/netdiscoverit/netdiscoverit-agent:latest
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+                requests:
+                  cpu: "1"
+                  memory: 2Gi
+              env:
+                - name: APP_ENV
+                  value: production
+                - name: POSTGRES_HOST
+                  value: /cloudsql/PROJECT_ID:REGION:netdiscoverit-db
+                - name: POSTGRES_PORT
+                  value: "5432"
+                - name: POSTGRES_DB
+                  value: netdiscoverit
+                - name: POSTGRES_USER
+                  value: netdiscoverit
+                - name: REDIS_HOST
+                  value: REDIS_HOST
+                - name: REDIS_PORT
+                  value: "6379"
+                - name: AGENT_LOG_LEVEL
+                  value: info
+                - name: AGENT_DISCOVERY_METHODS
+                  value: ssh,snmp,nmap,cdp,lldp
+              envFrom:
+                - secretRef:
+                    name: netdiscoverit-secrets
+              volumeMounts:
+                - name: cloudsql
+                  mountPath: /cloudsql
+          volumes:
+            - name: cloudsql
+              cloudSqlInstance:
+                instances:
+                  - PROJECT_ID:REGION:netdiscoverit-db

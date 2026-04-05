@@ -1,0 +1,72 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: netdiscoverit-api
+  labels:
+    app: netdiscoverit
+    component: api
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:netdiscoverit-db
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/netdiscoverit/netdiscoverit-api:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+            requests:
+              cpu: "1"
+              memory: 1Gi
+          env:
+            - name: APP_ENV
+              value: production
+            - name: POSTGRES_HOST
+              value: /cloudsql/PROJECT_ID:REGION:netdiscoverit-db
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: netdiscoverit
+            - name: POSTGRES_USER
+              value: netdiscoverit
+            - name: REDIS_HOST
+              value: REDIS_HOST
+            - name: REDIS_PORT
+              value: "6379"
+            - name: NEO4J_HOST
+              value: NEO4J_HOST
+            - name: NEO4J_PORT
+              value: "7687"
+            - name: NEO4J_USER
+              value: neo4j
+            - name: MINIO_ENDPOINT
+              value: https://storage.googleapis.com
+            - name: MINIO_BUCKET
+              value: netdiscoverit-data
+          envFrom:
+            - secretRef:
+                name: netdiscoverit-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

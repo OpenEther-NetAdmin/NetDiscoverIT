@@ -68,6 +68,13 @@ class AgentConfig(BaseModel):
     # Target devices (loaded from config file)
     devices: List[dict] = []
     
+    # LLM Providers
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    GOOGLE_API_KEY: str = ""
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2:7b"
+    
     # Sanitizer
     sanitizer: SanitizerConfig = SanitizerConfig()
     
@@ -94,4 +101,9 @@ class AgentConfig(BaseModel):
             SSH_TIMEOUT=int(os.getenv("SSH_TIMEOUT", "30")),
             SNMP_TIMEOUT=int(os.getenv("SNMP_TIMEOUT", "5")),
             LOG_LEVEL=os.getenv("LOG_LEVEL", "info"),
+            ANTHROPIC_API_KEY=os.getenv("ANTHROPIC_API_KEY", ""),
+            ANTHROPIC_MODEL=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY", ""),
+            OLLAMA_BASE_URL=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            OLLAMA_MODEL=os.getenv("OLLAMA_MODEL", "llama3.2:7b"),
         )

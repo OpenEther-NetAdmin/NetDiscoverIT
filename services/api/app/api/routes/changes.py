@@ -21,8 +21,6 @@ router = APIRouter()
 # CHANGE RECORDS
 # =============================================================================
 
-from app.services.change_service import VALID_TRANSITIONS, can_transition, generate_change_number
-
 
 TRANSITION_ROLES = {
     "approve": "admin",

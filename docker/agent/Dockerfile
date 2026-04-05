@@ -20,11 +20,14 @@ COPY services/agent/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY services/agent /app/agent
+COPY services/common /app/services/common
 COPY configs/agent.yaml /app/config/agent.yaml
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && \
+    touch /app/__init__.py && \
+    touch /app/services/__init__.py
 
-ENV PYTHONPATH=/app/agent
+ENV PYTHONPATH=/app
 ENV AGENT_CONFIG_PATH=/app/config/agent.yaml
 
 EXPOSE 8080

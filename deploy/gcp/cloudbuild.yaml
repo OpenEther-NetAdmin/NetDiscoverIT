@@ -51,6 +51,27 @@ steps:
     waitFor:
       - build-frontend
 
+  - id: run-migrations
+    name: ${_REGION}-docker.pkg.dev/$PROJECT_ID/netdiscoverit/${_API_IMAGE}:$SHORT_SHA
+    entrypoint: python
+    args:
+      - -m
+      - alembic
+      - upgrade
+      - head
+    secretEnv:
+      - POSTGRES_PASSWORD
+      - JWT_SECRET_KEY
+      - INTERNAL_API_KEY
+      - CREDENTIAL_ENCRYPTION_KEY
+    env:
+      - POSTGRES_HOST=/cloudsql/$PROJECT_ID:${_REGION}:${_DB_INSTANCE}
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=netdiscoverit
+      - POSTGRES_USER=netdiscoverit
+    waitFor:
+      - push-api
+
   - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -70,7 +91,7 @@ steps:
       - --set-secrets=POSTGRES_PASSWORD=netdiscoverit-postgres-password:latest,JWT_SECRET_KEY=netdiscoverit-jwt-secret:latest,INTERNAL_API_KEY=netdiscoverit-internal-api-key:latest,CREDENTIAL_ENCRYPTION_KEY=netdiscoverit-credential-encryption-key:latest
       - --set-env-vars=POSTGRES_HOST=/cloudsql/$PROJECT_ID:${_REGION}:${_DB_INSTANCE},POSTGRES_PORT=5432,POSTGRES_DB=netdiscoverit,POSTGRES_USER=netdiscoverit
     waitFor:
-      - push-api
+      - run-migrations
 
   - id: deploy-frontend
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -90,25 +111,6 @@ steps:
     waitFor:
       - push-frontend
 
-  - id: run-migrations
-    name: ${_REGION}-docker.pkg.dev/$PROJECT_ID/netdiscoverit/${_API_IMAGE}:$SHORT_SHA
-    entrypoint: python
-    args:
-      - -m
-      - alembic
-      - upgrade
-      - head
-    secretEnv:
-      - POSTGRES_PASSWORD
-      - JWT_SECRET_KEY
-    env:
-      - POSTGRES_HOST=/cloudsql/$PROJECT_ID:${_REGION}:${_DB_INSTANCE}
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=netdiscoverit
-      - POSTGRES_USER=netdiscoverit
-    waitFor:
-      - deploy-api
-
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8
@@ -119,5 +121,9 @@ availableSecrets:
       env: POSTGRES_PASSWORD
     - versionName: projects/$PROJECT_ID/secrets/netdiscoverit-jwt-secret/versions/latest
       env: JWT_SECRET_KEY
+    - versionName: projects/$PROJECT_ID/secrets/netdiscoverit-internal-api-key/versions/latest
+      env: INTERNAL_API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/netdiscoverit-credential-encryption-key/versions/latest
+      env: CREDENTIAL_ENCRYPTION_KEY
 
 timeout: 1200s

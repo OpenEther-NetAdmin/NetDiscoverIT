@@ -47,6 +47,17 @@ help:
 	@echo ""
 	@echo "  $(YELLOW)format$(NC)          - Format code"
 	@echo ""
+	@echo "GCP test environment:"
+	@echo "  $(YELLOW)gcp-init$(NC)        - Initialize Terraform"
+	@echo "  $(YELLOW)gcp-plan$(NC)        - Dry-run Terraform plan"
+	@echo "  $(YELLOW)gcp-up$(NC)          - Provision GCP test environment"
+	@echo "  $(YELLOW)gcp-down$(NC)        - Destroy GCP test environment"
+	@echo "  $(YELLOW)gcp-status$(NC)      - Show VM IPs and URLs"
+	@echo "  $(YELLOW)gcp-ssh-cloud$(NC)   - SSH into cloud-vm"
+	@echo "  $(YELLOW)gcp-ssh-agent$(NC)   - SSH into agent-vm"
+	@echo "  $(YELLOW)gcp-log-cloud$(NC)   - Tail cloud-vm startup log"
+	@echo "  $(YELLOW)gcp-log-agent$(NC)   - Tail agent-vm startup log"
+	@echo ""
 
 # =============================================================================
 # DOCKER
@@ -156,3 +167,43 @@ release:
 	git tag -a v$$(cat VERSION) -m "Release v$$(cat VERSION)"
 	git push origin v$$(cat VERSION)
 	@echo "Release v$$(cat VERSION) pushed. CD will run automatically."
+
+# =============================================================================
+# GCP TEST ENVIRONMENT
+# =============================================================================
+# Prerequisites: gcloud CLI authenticated, terraform installed, terraform.tfvars
+# filled in at infra/gcp/terraform.tfvars (see terraform.tfvars.example).
+# =============================================================================
+GCP_ZONE ?= us-central1-a
+GCP_PROJECT ?= $(shell cd infra/gcp && terraform output -raw project_id 2>/dev/null || echo "not-initialized")
+
+gcp-init:
+	cd infra/gcp && terraform init
+
+gcp-plan:
+	cd infra/gcp && terraform plan
+
+gcp-up:
+	cd infra/gcp && terraform apply -auto-approve
+	@echo ""
+	@echo "Startup scripts are running on the VMs. Monitor with:"
+	@echo "  make gcp-log-cloud"
+	@echo "  make gcp-log-agent"
+
+gcp-down:
+	cd infra/gcp && terraform destroy -auto-approve
+
+gcp-status:
+	cd infra/gcp && terraform output
+
+gcp-ssh-cloud:
+	gcloud compute ssh cloud-vm --zone=$(GCP_ZONE) --tunnel-through-iap
+
+gcp-ssh-agent:
+	gcloud compute ssh agent-vm --zone=$(GCP_ZONE) --tunnel-through-iap
+
+gcp-log-cloud:
+	gcloud compute ssh cloud-vm --zone=$(GCP_ZONE) --tunnel-through-iap -- 'tail -f /var/log/startup-script.log'
+
+gcp-log-agent:
+	gcloud compute ssh agent-vm --zone=$(GCP_ZONE) --tunnel-through-iap -- 'tail -f /var/log/startup-script.log'

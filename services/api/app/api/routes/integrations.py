@@ -1,6 +1,7 @@
 """
 Integration config routes
 """
+import base64 as _base64
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
@@ -486,9 +487,12 @@ async def _test_integration(integration, credentials, test_message):
             if not credentials or not base_url:
                 return {"success": False, "message": "Missing credentials or base_url"}
 
+            _email = credentials.get("email", "")
+            _token = credentials.get("api_token", "")
+            _encoded = _base64.b64encode(f"{_email}:{_token}".encode()).decode()
             async with httpx.AsyncClient() as client:
                 headers = {
-                    "Authorization": "Basic " + credentials.get("api_token", ""),
+                    "Authorization": f"Basic {_encoded}",
                     "Content-Type": "application/json",
                 }
                 response = await client.get(

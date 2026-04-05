@@ -24,7 +24,7 @@ async def trigger_discovery(request: Request,
     """Trigger a new discovery"""
     from uuid import UUID, uuid4
     import json
-    import redis
+    import redis.asyncio as redis_async
 
     org_id = UUID(current_user.organization_id)
     discovery_id = uuid4()
@@ -45,7 +45,7 @@ async def trigger_discovery(request: Request,
     await db.refresh(discovery_obj)
 
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = redis_async.from_url(settings.REDIS_URL)
         job_data = {
             "discovery_id": str(discovery_id),
             "organization_id": str(org_id),
@@ -53,8 +53,8 @@ async def trigger_discovery(request: Request,
             "discovery_type": discovery.discovery_type,
             "scan_profile": "standard",
         }
-        redis_client.lpush("discovery:jobs", json.dumps(job_data))
-        redis_client.close()
+        await redis_client.lpush("discovery:jobs", json.dumps(job_data))
+        await redis_client.aclose()
     except Exception as e:
         import logging
 
@@ -80,6 +80,44 @@ async def trigger_discovery(request: Request,
         created_at=discovery_obj.created_at,
         completed_at=None,
     )
+
+
+@router.get("", response_model=list[schemas.Discovery])
+@limiter.limit(LIMIT_READ)
+async def list_discoveries(
+    request: Request,
+    skip: int = 0,
+    limit: int = 20,
+    status: str | None = None,
+    current_user: schemas.User = Depends(dependencies.get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List discoveries for current organization"""
+    from uuid import UUID
+
+    org_id = UUID(current_user.organization_id)
+    query = select(Discovery).where(Discovery.organization_id == org_id)
+
+    if status:
+        query = query.where(Discovery.status == status)
+
+    query = query.order_by(Discovery.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    discoveries = result.scalars().all()
+
+    return [
+        schemas.Discovery(
+            id=str(d.id),
+            organization_id=str(d.organization_id),
+            name=d.name,
+            discovery_type=d.discovery_type or "full",
+            status=d.status,
+            device_count=d.results.get("device_count", 0) if d.results else 0,
+            created_at=d.created_at,
+            completed_at=d.completed_at,
+        )
+        for d in discoveries
+    ]
 
 
 @router.get("/{discovery_id}", response_model=schemas.Discovery)

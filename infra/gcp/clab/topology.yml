@@ -1,0 +1,54 @@
+# infra/gcp/clab/topology.yml
+# Nokia SR Linux spine-leaf topology for NetDiscoverIT agent testing.
+# 4 routers/switches the agent will discover via SSH + LLDP neighbor detection.
+
+name: netdiscoverit-test-lab
+
+topology:
+  nodes:
+    spine1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.10.1
+      startup-config: |
+        set / system name host-name spine1
+        set / interface ethernet-1/1 admin-state enable
+        set / interface ethernet-1/2 admin-state enable
+
+    spine2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.10.1
+      startup-config: |
+        set / system name host-name spine2
+        set / interface ethernet-1/1 admin-state enable
+        set / interface ethernet-1/2 admin-state enable
+
+    leaf1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.10.1
+      startup-config: |
+        set / system name host-name leaf1
+        set / interface ethernet-1/1 admin-state enable
+        set / interface ethernet-1/49 admin-state enable
+        set / interface ethernet-1/50 admin-state enable
+
+    leaf2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:24.10.1
+      startup-config: |
+        set / system name host-name leaf2
+        set / interface ethernet-1/1 admin-state enable
+        set / interface ethernet-1/49 admin-state enable
+        set / interface ethernet-1/50 admin-state enable
+
+    server1:
+      kind: linux
+      image: alpine:latest
+
+  links:
+    # Spine-leaf uplinks
+    - endpoints: [spine1:e1-1, leaf1:e1-49]
+    - endpoints: [spine1:e1-2, leaf2:e1-49]
+    - endpoints: [spine2:e1-1, leaf1:e1-50]
+    - endpoints: [spine2:e1-2, leaf2:e1-50]
+    # Server access link
+    - endpoints: [leaf1:e1-1, server1:eth1]

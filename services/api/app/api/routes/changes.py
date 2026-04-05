@@ -414,6 +414,7 @@ async def delete_change_record(request: Request,
 )
 @limiter.limit(LIMIT_WRITE)
 async def propose_change(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeProposeRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -494,6 +495,7 @@ async def propose_change(
 )
 @limiter.limit(LIMIT_WRITE)
 async def approve_change(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeApproveRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -576,6 +578,7 @@ async def approve_change(
 )
 @limiter.limit(LIMIT_WRITE)
 async def implement_change(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeImplementRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -647,6 +650,7 @@ async def implement_change(
 @router.post("/changes/{change_id}/verify", response_model=schemas.ChangeRecordResponse)
 @limiter.limit(LIMIT_WRITE)
 async def verify_change(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeVerifyRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -721,6 +725,7 @@ async def verify_change(
 )
 @limiter.limit(LIMIT_WRITE)
 async def rollback_change(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeRollbackRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),
@@ -798,6 +803,7 @@ async def rollback_change(
 )
 @limiter.limit(LIMIT_WRITE)
 async def sync_change_to_ticket(
+    http_request: Request,
     change_id: str,
     request: schemas.ChangeSyncTicketRequest,
     current_user: schemas.User = Depends(dependencies.get_current_user),

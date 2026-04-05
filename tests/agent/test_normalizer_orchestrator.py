@@ -128,3 +128,18 @@ class TestNormalizeCommandOutput:
             )
             
             assert result.template_name is not None or result.parser_method == "textfsm"
+
+    def test_fallback_result_contains_no_raw_config(self):
+        """Raw config text must never appear in normalized output"""
+        from agent.normalizer import normalize_command_output
+
+        result = normalize_command_output(
+            vendor="unknown_vendor_xyz",
+            command="show running-config",
+            raw_output="hostname SecretRouter\npassword supersecret123\nsnmp-server community public RO"
+        )
+        for record in result.records:
+            assert "raw_config" not in record, "raw_config key must not appear in normalized output"
+            assert "raw_snippet" not in record or record.get("raw_snippet") is None or \
+                   "supersecret" not in str(record.get("raw_snippet", "")), \
+                   "Raw config content must not propagate"

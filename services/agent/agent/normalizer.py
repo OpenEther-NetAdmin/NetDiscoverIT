@@ -5,6 +5,7 @@ Converts vendor-specific configs to JSON using TextFSM or LLM
 
 import json
 import logging
+import os
 from typing import Dict
 
 from agent.normalizer_textfsm.textfsm_parser import TextFSMParser
@@ -81,6 +82,9 @@ class ConfigNormalizer:
         """Use Ollama for normalization"""
         import httpx
         
+        base_url = getattr(self.config, 'OLLAMA_BASE_URL', 'http://localhost:11434')
+        model = getattr(self.config, 'OLLAMA_MODEL', 'llama3.2:7b')
+        
         prompt = f"""Convert this network device configuration to JSON.
 Only include factual information from the config. Do not infer or add fields.
 
@@ -91,9 +95,9 @@ Output valid JSON only, no explanations:"""
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.config.OLLAMA_BASE_URL}/api/generate",
+                f"{base_url}/api/generate",
                 json={
-                    "model": "llama3.2:7b",
+                    "model": model,
                     "prompt": prompt,
                     "stream": False,
                     "format": "json"
@@ -110,10 +114,9 @@ Output valid JSON only, no explanations:"""
     
     async def _normalize_gemini(self, raw_config: str) -> Dict:
         """Use Google Gemini for normalization"""
-        import os
         import httpx
         
-        api_key = os.getenv("GOOGLE_API_KEY")
+        api_key = getattr(self.config, 'GOOGLE_API_KEY', None) or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise Exception("GOOGLE_API_KEY not set")
         
@@ -152,10 +155,15 @@ Output valid JSON only, no explanations. Start your response with {{
     
     async def _normalize_anthropic(self, raw_config: str) -> Dict:
         """Use Anthropic Claude for normalization"""
-        import os
         from anthropic import Anthropic
         
-        client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        api_key = getattr(self.config, 'ANTHROPIC_API_KEY', None) or os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise Exception("ANTHROPIC_API_KEY not set")
+        
+        model = getattr(self.config, 'ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')
+        
+        client = Anthropic(api_key=api_key)
         
         sanitized_config = self._sanitize_for_cloud(raw_config)
         
@@ -168,7 +176,7 @@ Configuration:
 Output valid JSON only, no explanations:"""
         
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=model,
             max_tokens=4000,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -176,15 +184,19 @@ Output valid JSON only, no explanations:"""
         return json.loads(message.content[0].text)
     
     def _normalize_rulebased(self, raw_config: str) -> Dict:
-        """Fallback rule-based normalization"""
+        """Fallback rule-based normalization — extracts structured facts only.
+
+        PRIVACY: raw config text is never included in output. Only parsed
+        structural facts (hostname, vendor, interfaces, VLANs) are returned.
+        """
         result = {
             "hostname": self._extract_value(raw_config, r"hostname\s+(\S+)"),
             "vendor": self._detect_vendor(raw_config),
             "interfaces": self._extract_interfaces(raw_config),
             "vlans": self._extract_vlans(raw_config),
-            "raw_config": raw_config[:1000]  # Truncate for safety
+            "_parse_quality": "rule_based_only",
         }
-        
+
         return result
     
     def _extract_value(self, config: str, pattern: str) -> str:
@@ -329,24 +341,25 @@ def normalize_command_output(
 
 
 def _fallback_parse(raw_output: str, vendor: str) -> list:
-    """Simple fallback parser when TextFSM is unavailable."""
+    """Simple fallback parser when TextFSM is unavailable.
+
+    PRIVACY: raw output is never stored. Only extracted structured facts.
+    """
     import re
-    
+
     records = []
     record = {}
-    
+
     hostname_match = re.search(r"hostname\s+(\S+)", raw_output, re.IGNORECASE)
     if hostname_match:
         record["hostname"] = hostname_match.group(1)
-    
+
     version_match = re.search(r"version\s+([\d\.\(\)]+)", raw_output, re.IGNORECASE)
     if version_match:
         record["version"] = version_match.group(1)
-    
-    if record:
-        record["vendor"] = vendor
-        records.append(record)
-    else:
-        records.append({"raw_snippet": raw_output[:500], "vendor": vendor})
-    
+
+    record["vendor"] = vendor
+    record["_parse_quality"] = "regex_fallback"
+    records.append(record)
+
     return records

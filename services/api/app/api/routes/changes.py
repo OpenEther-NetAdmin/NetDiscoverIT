@@ -892,14 +892,19 @@ async def sync_change_to_ticket(
 
 @router.post("/webhooks/change/{integration_id}")
 async def change_webhook(
+    http_request: Request,
     integration_id: str,
     payload: dict,
     db: AsyncSession = Depends(get_db),
 ):
     """Webhook receiver for external ticketing system approval"""
+    import hmac
+    import hashlib
+    import json as _json
     from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
+    from cryptography.fernet import Fernet
     from app.models.models import IntegrationConfig, ChangeRecord
 
     try:
@@ -914,6 +919,17 @@ async def change_webhook(
 
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
+
+    if integration.webhook_secret:
+        fernet = Fernet(settings.CREDENTIAL_ENCRYPTION_KEY.encode())
+        secret_bytes = fernet.decrypt(integration.webhook_secret.encode())
+        raw_body = _json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        expected_sig = hmac.new(secret_bytes, raw_body, hashlib.sha256).hexdigest()
+        provided_sig = http_request.headers.get("X-Webhook-Signature", "")
+        if provided_sig.startswith("sha256="):
+            provided_sig = provided_sig[7:]
+        if not hmac.compare_digest(expected_sig, provided_sig):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if integration.integration_type == "servicenow":
         change_request_id = payload.get("sys_id") or payload.get(

@@ -20,7 +20,7 @@ NC := \033[0m # No Color
 # =============================================================================
 # HELP
 # =============================================================================
-.PHONY: help
+.PHONY: help gcp-init gcp-plan gcp-up gcp-down gcp-status gcp-ssh-cloud gcp-ssh-agent gcp-log-cloud gcp-log-agent
 help:
 	@echo ""
 	@echo "$(GREEN)NetDiscoverIT Makefile$(NC)"
@@ -43,7 +43,7 @@ help:
 	@echo "  $(YELLOW)lint$(NC)            - Run linters"
 	@echo ""
 	@echo "  $(YELLOW)api-shell$(NC)       - Open API shell"
-	@echo "  $(YAME)db-shell$(NC)         - Open PostgreSQL shell"
+	@echo "  $(YELLOW)db-shell$(NC)         - Open PostgreSQL shell"
 	@echo ""
 	@echo "  $(YELLOW)format$(NC)          - Format code"
 	@echo ""

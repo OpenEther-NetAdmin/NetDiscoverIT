@@ -1,11 +1,14 @@
 from datetime import datetime, timezone
 from typing import Dict
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import ChangeRecord
 
+_CHANGE_NUMBER_LOCK_KEY = 1_000_001
+
 async def generate_change_number(db: AsyncSession) -> str:
     """Generate unique change number: CHG-YYYY-NNNN"""
+    await db.execute(text(f"SELECT pg_advisory_xact_lock({_CHANGE_NUMBER_LOCK_KEY})"))
     year = datetime.now(timezone.utc).year
     prefix = f"CHG-{year}-"
 

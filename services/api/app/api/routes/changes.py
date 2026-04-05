@@ -505,7 +505,7 @@ async def approve_change(
     from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
-    from datetime import datetime
+    from datetime import datetime, timezone
     from app.models.models import ChangeRecord
 
     if current_user.role != "admin":
@@ -542,7 +542,7 @@ async def approve_change(
 
     change.status = "approved"
     change.approved_by = UUID(current_user.id)
-    change.approved_at = datetime.utcnow()
+    change.approved_at = datetime.now(timezone.utc)
     change.approval_notes = request.approval_notes
 
     await db.commit()
@@ -588,7 +588,7 @@ async def implement_change(
     from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
-    from datetime import datetime
+    from datetime import datetime, timezone
     from app.models.models import ChangeRecord
 
     try:
@@ -616,7 +616,7 @@ async def implement_change(
 
     change.status = "in_progress"
     change.implemented_by = UUID(current_user.id)
-    change.implemented_at = datetime.utcnow()
+    change.implemented_at = datetime.now(timezone.utc)
     change.implementation_evidence = request.implementation_evidence
     change.post_change_hash = request.post_change_hash
 
@@ -735,7 +735,7 @@ async def rollback_change(
     from uuid import UUID
     from sqlalchemy import select
     from fastapi import HTTPException
-    from datetime import datetime
+    from datetime import datetime, timezone
     from app.models.models import ChangeRecord
 
     if current_user.role != "admin":
@@ -768,7 +768,7 @@ async def rollback_change(
 
     change.status = "rolled_back"
     change.rollback_performed = True
-    change.rollback_at = datetime.utcnow()
+    change.rollback_at = datetime.now(timezone.utc)
     change.rollback_reason = request.rollback_reason
 
     await db.commit()
@@ -930,10 +930,10 @@ async def change_webhook(
             change = cr_result.scalar_one_or_none()
 
             if change and change.status == "proposed":
-                from datetime import datetime
+                from datetime import datetime, timezone
 
                 change.status = "approved"
-                change.approved_at = datetime.utcnow()
+                change.approved_at = datetime.now(timezone.utc)
                 change.approval_notes = "Auto-approved via ServiceNow webhook"
                 await db.commit()
 
@@ -948,10 +948,10 @@ async def change_webhook(
             change = cr_result.scalar_one_or_none()
 
             if change and change.status == "proposed":
-                from datetime import datetime
+                from datetime import datetime, timezone
 
                 change.status = "approved"
-                change.approved_at = datetime.utcnow()
+                change.approved_at = datetime.now(timezone.utc)
                 change.approval_notes = "Auto-approved via JIRA webhook"
                 await db.commit()
 
@@ -975,7 +975,7 @@ async def trigger_simulation(
     from uuid import UUID
     from sqlalchemy import select
     from app.models.models import ChangeRecord
-    from datetime import datetime
+    from datetime import datetime, timezone
     from uuid import uuid4
 
     try:
@@ -1012,7 +1012,7 @@ async def trigger_simulation(
             "organization_id": str(org_id),
             "proposed_config": request.proposed_config,
             "status": "pending",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         },
     )
     await redis_client.expire(f"simulation:{simulation_id}", 3600)
@@ -1022,7 +1022,7 @@ async def trigger_simulation(
     change.simulation_results = {
         "simulation_id": simulation_id,
         "status": "started",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
     }
 
     await db.commit()

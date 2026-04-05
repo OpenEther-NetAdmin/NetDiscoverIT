@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +6,7 @@ from app.models.models import ChangeRecord
 
 async def generate_change_number(db: AsyncSession) -> str:
     """Generate unique change number: CHG-YYYY-NNNN"""
-    year = datetime.utcnow().year
+    year = datetime.now(timezone.utc).year
     prefix = f"CHG-{year}-"
 
     result = await db.execute(

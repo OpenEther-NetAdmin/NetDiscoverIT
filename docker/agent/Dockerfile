@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 COPY services/agent/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-COPY services/agent /app/agent
+COPY services/agent/agent /app/agent
 COPY services/common /app/services/common
 COPY configs/agent.yaml /app/config/agent.yaml
 

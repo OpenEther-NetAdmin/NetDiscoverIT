@@ -124,13 +124,13 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+      args:
+        REACT_APP_API_URL: ${APP_API_URL:-http://localhost:8000}
+        REACT_APP_WS_URL: ${APP_WS_URL:-ws://localhost:8000}
     container_name: netdiscoverit-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=${APP_API_URL:-http://localhost:8000}
-      - REACT_APP_WS_URL=ws://localhost:8000
+      - "3000:80"
     depends_on:
       - api
 

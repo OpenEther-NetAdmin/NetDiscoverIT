@@ -1,5 +1,11 @@
 FROM node:20-alpine AS builder
 
+# Build-time API URL — must be set when building for non-localhost deployments
+ARG REACT_APP_API_URL=http://localhost:8000
+ARG REACT_APP_WS_URL=ws://localhost:8000
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_WS_URL=$REACT_APP_WS_URL
+
 # Set working directory
 WORKDIR /app
 

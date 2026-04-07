@@ -174,7 +174,7 @@ release:
 # Prerequisites: gcloud CLI authenticated, terraform installed, terraform.tfvars
 # filled in at infra/gcp/terraform.tfvars (see terraform.tfvars.example).
 # =============================================================================
-GCP_ZONE ?= us-central1-a
+GCP_ZONE ?= $(shell cd infra/gcp && terraform output -raw zone 2>/dev/null || echo "us-central1-a")
 GCP_PROJECT ?= $(shell cd infra/gcp && terraform output -raw project_id 2>/dev/null || echo "not-initialized")
 
 gcp-init:

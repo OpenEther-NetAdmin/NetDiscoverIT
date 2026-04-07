@@ -7,20 +7,18 @@ echo "=== NetDiscoverIT cloud-vm startup: $(date) ==="
 
 # ─── Install Docker ──────────────────────────────────────────────────────────
 apt-get update -y
-apt-get install -y ca-certificates curl gnupg git python3 openssl
+apt-get install -y ca-certificates curl gnupg git python3 python3-cryptography openssl
 
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-  > /etc/apt/sources.list.d/docker.list
+ARCH=$(dpkg --print-architecture)
+CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $CODENAME stable" > /etc/apt/sources.list.d/docker.list
 
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-pip3 install cryptography --break-system-packages 2>/dev/null || pip3 install cryptography
 
 systemctl enable docker
 systemctl start docker

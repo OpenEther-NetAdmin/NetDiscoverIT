@@ -18,9 +18,9 @@ variable "zone" {
 }
 
 variable "cloud_machine_type" {
-  description = "Machine type for the cloud VM (API + all platform services)"
+  description = "Machine type for the cloud VM (API + all platform services, including Ollama)"
   type        = string
-  default     = "e2-standard-4"
+  default     = "e2-highmem-4"
 }
 
 variable "agent_machine_type" {

@@ -151,7 +151,7 @@ EOF
 cd /opt/netdiscoverit
 docker compose run --rm \
   -v /opt/netdiscoverit/configs/agent-gcp.yaml:/app/config/agent.yaml:ro \
-  agent python -m agent.main --once
+  agent --once
 
 echo "=== agent-vm startup complete ==="
 echo "  Agent pointed at cloud API: http://$CLOUD_VM_IP:8000"
